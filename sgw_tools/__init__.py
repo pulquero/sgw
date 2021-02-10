@@ -8,6 +8,7 @@ Ch1 Spectral Graph Theory
 paperVC13 A multiresolution descriptor for deformable 3D shape retrieval
 """
 import numpy as np
+import pygsp as gsp
 import sklearn.cluster as cluster
 import sklearn.metrics as metrics
 import matplotlib.pyplot as plt
@@ -38,18 +39,27 @@ def gwt(f, G, kernel):
     return coeffs
 
 def multiResolutionEmbedding(G, filter, R, ts, **kwargs):
+    """
+    Multi-resolution embedding (GraphWave).
+    G = graph
+    filter(G, L) = kernel for G at level L, e.g. MexicanHat(G, Nf=L+1, normalize=True)
+    R = resolution (integer for levels 1..R else iterator of levels)
+    ts = np.linspace(0, 100, 25)
+    """
+    if type(R) == int:
+        R = range(1, R+1)
     G.estimate_lmax()
     multiResEmbedding = []
-    for L in range(1, R+1):
+    for L in R:
         g = filter(G, L)
         levelEmbedding = embedding(g, ts, **kwargs)
         multiResEmbedding.append(levelEmbedding)
     return np.concatenate(multiResEmbedding, axis=1)
 
-"""
-ts = np.linspace(0, 250, 25)
-"""
 def embedding(g, ts, nodes = None, **kwargs):
+    """
+    ts = np.linspace(0, 100, 25)
+    """
     if nodes is None:
         s = np.identity(g.G.N)
     else:
@@ -63,7 +73,7 @@ def embedding(g, ts, nodes = None, **kwargs):
     def chi(xt):
         return np.mean(np.exp(xt*1j), axis=0)
     return chi(tig_t_grid)
- 
+
 def plotEmbedding(embedding):
     fig, axs = plt.subplots(embedding.shape[0], embedding.shape[1], sharex='col', sharey='col')
     for n in range(embedding.shape[0]):
@@ -91,27 +101,29 @@ def plotSignal(G, y):
     G.set_coordinates()
     G.plot_signal(y)
     plotNodeLabels(G)
-    
-"""
-Multi-resolution SGWs.
-G = graph
-filter(G, L) = kernel for G at level L, e.g. MexicanHat(G, Nf=L+1, normalize=True)
-R = resolution (integer)
-"""
+
 def multiResolutionSignature(G, filter, R, **kwargs):
+    """
+    Multi-resolution SGWs.
+    G = graph
+    filter(G, L) = kernel for G at level L, e.g. MexicanHat(G, Nf=L+1, normalize=True)
+    R = resolution (integer for levels 1..R else iterator of levels)
+    """
+    if type(R) == int:
+        R = range(1, R+1)
     G.estimate_lmax()
     multiResSig = []
-    for L in range(1, R+1):
+    for L in R:
         g = filter(G, L)
         levelSig = signature(g, **kwargs)
         multiResSig.append(levelSig)
     return np.concatenate(multiResSig, axis=1)
 
-"""
-Exact implementation of SGW signature.
-Requires calculation of Fourier basis.
-"""
 def _signature_exact(g):
+    """
+    Exact implementation of SGW signature.
+    Requires calculation of Fourier basis.
+    """
     G = g.G
     G.compute_fourier_basis()
     ge = g.evaluate(G.e)
@@ -124,12 +136,12 @@ def _signature_exact(g):
                 sum += ge[t, k] * ev**2
             sig[i][t] = sum
     return sig
- 
-"""
-Reference (PyGSP) implementation of SGW signature.
-Approximate by default (avoids calculation of Fourier basis).
-"""
+
 def _signature_gsp(g, **kwargs):
+    """
+    Reference (PyGSP) implementation of SGW signature.
+    Approximate by default (avoids calculation of Fourier basis).
+    """
     s = np.identity(g.G.N)
     tig = g.filter(s[..., np.newaxis], **kwargs)
     if tig.ndim == 2:
@@ -151,11 +163,11 @@ def codebook(sig, k):
     kmeans = cluster.KMeans(n_clusters=k, n_jobs=-1)
     kmeans.fit(sig)
     return _dedup(kmeans.cluster_centers_)
- 
-"""
-Auto-tune the number of codewords (clusters).
-""" 
+
 def codebook_auto(sig, mink=2, maxk = None):
+    """
+    Auto-tune the number of codewords (clusters).
+    """ 
     if mink < 2:
         raise Exception('mink must be at least 2')
     if maxk is None:
@@ -190,11 +202,11 @@ def _dedup(arrs):
     else:
         return arrs
 
-"""
-SGW code.
-alpha = 0 completely smoothed
-"""
 def code(sig, codebook, alpha):
+    """
+    SGW code.
+    alpha = 0 completely smoothed
+    """
     code = np.empty([codebook.shape[0], sig.shape[0]])
     def expDist(i, j):
         diff = sig[i] - codebook[j]
@@ -206,20 +218,20 @@ def code(sig, codebook, alpha):
         for r in range(code.shape[0]):
             code[i][r] = expDist(i, r)/sum
     return code
-    
-"""
-Histogram (code @ 1)
-Sum across nodes for each feature.
-Alternative aggregation functions include np.mean and np.amax.
-"""
+
 def histogram(code, agg=np.sum):
+    """
+    Histogram (code @ 1)
+    Sum across nodes for each feature.
+    Alternative aggregation functions include np.mean and np.amax.
+    """
     N = code.shape[1] # graph size
     Nf = code.shape[0] # num of features
     h = np.empty([Nf])
     for i in range(Nf):
         h[i] = agg(code[i])
     return h
-    
+
 def bof(code, G, eps):
     K = np.exp(-G.W.toarray()/eps)
     return code @ K @ code.transpose()
