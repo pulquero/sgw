@@ -11,6 +11,7 @@ import numpy as np
 import pygsp as gsp
 import sklearn.cluster as cluster
 import sklearn.metrics as metrics
+from scipy import sparse
 import matplotlib.pyplot as plt
 
 """
@@ -32,10 +33,10 @@ def gwt(f, G, kernel):
     f_hat = G.gft(f)
     coeffs = []
     for i in range(G.N):
-        sum = 0.0
+        total = 0.0
         for k in range(G.N):
-            sum += kernel(G.e[k]) * f_hat[k] * G.U[i, k]
-        coeffs.append(sum)
+            total += kernel(G.e[k]) * f_hat[k] * G.U[i, k]
+        coeffs.append(total)
     return coeffs
 
 def multiResolutionEmbedding(G, filter, R, ts, **kwargs):
@@ -130,11 +131,11 @@ def _signature_exact(g):
     sig = np.empty([ge.shape[1], ge.shape[0]])
     for i in range(ge.shape[1]):
         for t in range(ge.shape[0]):
-            sum = 0.0
+            total = 0.0
             for k in range(G.N):
                 ev = G.U[i, k]
-                sum += ge[t, k] * ev**2
-            sig[i][t] = sum
+                total += ge[t, k] * ev**2
+            sig[i][t] = total
     return sig
 
 def _signature_gsp(g, **kwargs):
@@ -212,11 +213,11 @@ def code(sig, codebook, alpha):
         diff = sig[i] - codebook[j]
         return np.exp(-alpha*np.inner(diff, diff))
     for i in range(code.shape[1]):
-        sum = 0.0
+        total = 0.0
         for k in range(code.shape[0]):
-            sum += expDist(i, k)
+            total += expDist(i, k)
         for r in range(code.shape[0]):
-            code[i][r] = expDist(i, r)/sum
+            code[i][r] = expDist(i, r)/total
     return code
 
 def histogram(code, agg=np.sum):
@@ -235,4 +236,48 @@ def histogram(code, agg=np.sum):
 def bof(code, G, eps):
     K = np.exp(-G.W.toarray()/eps)
     return code @ K @ code.transpose()
- 
+
+class LGraph(gsp.graphs.Graph):
+    def __init__(self, L, gtype='unknown', lap_type='combinatorial'):
+        self.L = L
+        self.lap_type = lap_type
+        self.N = L.shape[0]
+        self.gtype = gtype
+
+class Hypergraph(LGraph):
+    def __init__(self, I, gtype='unknown', lap_type='combinatorial'):
+        self.I = sparse.csr_matrix(I)
+        self.lap_type = lap_type
+        self.N = I.shape[0]
+        self.Ne = I.shape[1]
+        self.gtype = gtype
+        self.compute_laplacian(lap_type)
+        self.plotting = {'vertex_size': 100,
+                         'vertex_color': (0.12, 0.47, 0.71, 1),
+                         'edge_color': (0.5, 0.5, 0.5, 1),
+                         'edge_width': 1,
+                         'edge_style': '-'}
+
+    def is_directed(self, recompute=False):
+        return False
+
+    def compute_laplacian(self, lap_type):
+        self.L = self.I @ self.I.transpose()
+        if lap_type == 'normalized':
+            D_inv_sqrt = np.diagflat(1.0/np.sqrt(self.d))
+            self.L = D_inv_sqrt @ self.L @ D_inv_sqrt
+        self.L = sparse.csc_matrix(self.L)
+
+    @property
+    def W(self):
+        if not hasattr(self, '_W'):
+            w = (self.I @ self.I.transpose()).todense()
+            np.fill_diagonal(w, 0)
+            self._W = sparse.lil_matrix(w)
+        return self._W
+
+    @property
+    def d(self):
+        if not hasattr(self, '_d'):
+            self._d = np.asarray(np.sum(self.I != 0, axis=1)).squeeze()
+        return self._d
