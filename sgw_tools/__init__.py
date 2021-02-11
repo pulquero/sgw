@@ -239,13 +239,44 @@ def bof(code, G, eps):
 
 class LGraph(gsp.graphs.Graph):
     def __init__(self, L, gtype='unknown', lap_type='combinatorial'):
+        self.logger = gsp.utils.build_logger(__name__)
         self.L = L
         self.lap_type = lap_type
         self.N = L.shape[0]
         self.gtype = gtype
 
+    def compute_fourier_basis(self, recompute=False):
+        if hasattr(self, '_e') and hasattr(self, '_U') and not recompute:
+            return
+
+        assert self.L.shape == (self.N, self.N)
+        if self.N > 3000:
+            self.logger.warning('Computing the full eigendecomposition of a '
+                                'large matrix ({0} x {0}) may take some '
+                                'time.'.format(self.N))
+
+        self._e, self._U = np.linalg.eigh(self.L.toarray())
+
+        self._e[np.isclose(self._e, 0)] = 0
+
+        if self.lap_type == 'normalized' and hasattr(self, '_iw'):
+            e_bound = np.max(self.iw)
+            if np.isclose(self._e[-1], e_bound):
+                self._e[-1] = e_bound
+            assert self._e[-1] <= e_bound
+
+        assert np.max(self._e) == self._e[-1]
+        self._lmax = self._e[-1]
+        self._mu = np.max(np.abs(self._U))
+
 class Hypergraph(LGraph):
     def __init__(self, I, gtype='unknown', lap_type='combinatorial'):
+        self.logger = gsp.utils.build_logger(__name__)
+        self._W = None
+        self._d = None
+        self._dw = None
+        self._i = None
+        self._iw = None
         self.I = sparse.csr_matrix(I)
         self.lap_type = lap_type
         self.N = I.shape[0]
@@ -264,23 +295,41 @@ class Hypergraph(LGraph):
     def compute_laplacian(self, lap_type):
         self.L = self.I @ self.I.transpose()
         if lap_type == 'normalized':
-            D_inv_sqrt = np.diagflat(1.0/np.sqrt(self.d))
+            D_inv_sqrt = np.diagflat(1.0/np.sqrt(self.dw))
             self.L = D_inv_sqrt @ self.L @ D_inv_sqrt
         self.L = sparse.csc_matrix(self.L)
 
     @property
     def W(self):
-        if not hasattr(self, '_W'):
-            w = (self.I @ self.I.transpose()).todense()
+        if self._W is None:
+            w = (self.I @ self.I.transpose()).toarray()
             np.fill_diagonal(w, 0)
             self._W = sparse.lil_matrix(w)
         return self._W
 
     @property
     def d(self):
-        if not hasattr(self, '_d'):
-            self._d = np.asarray(np.sum(self.I != 0, axis=1)).squeeze()
+        if self._d is None:
+            self._d = np.asarray(np.sum((self.I != 0).toarray(), axis=1)).squeeze()
         return self._d
+
+    @property
+    def dw(self):
+        if self._dw is None:
+            self._dw = np.asarray(np.sum(np.power(self.I.toarray(), 2), axis=1)).squeeze()
+        return self._dw
+
+    @property
+    def i(self):
+        if self._i is None:
+            self._i = np.asarray(np.sum((self.I != 0).toarray(), axis=0)).squeeze()
+        return self._i
+
+    @property
+    def iw(self):
+        if self._iw is None:
+            self._iw = np.asarray(np.sum(np.power(self.I.toarray(), 2), axis=0)).squeeze()
+        return self._iw
 
 class GWHeat(gsp.filters.Filter):
     """
