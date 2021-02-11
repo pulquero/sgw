@@ -281,3 +281,20 @@ class Hypergraph(LGraph):
         if not hasattr(self, '_d'):
             self._d = np.asarray(np.sum(self.I != 0, axis=1)).squeeze()
         return self._d
+
+class GWHeat(gsp.filters.Filter):
+    """
+    Heat kernel used by GraphWave.
+    """
+    def __init__(self, G, Nf=2):
+        def kernel(x, s):
+            return np.exp(-x * s)
+
+        e_nz = G.e[np.invert(np.isclose(G.e, 0))]
+        e_mean = np.sqrt(e_nz[0] * e_nz[-1])
+        s_min = -np.log(0.95) / e_mean
+        s_max = -np.log(0.80) / e_mean
+        scales = np.linspace(s_min, s_max, Nf)
+        kernels = [lambda x, s=s: kernel(x, s) for s in scales]
+
+        gsp.filters.Filter.__init__(self, G, kernels)
