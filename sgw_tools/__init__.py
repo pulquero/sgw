@@ -161,7 +161,7 @@ SGW signature.
 signature = _signature_gsp
 
 def codebook(sig, k):
-    kmeans = cluster.KMeans(n_clusters=k, n_jobs=-1)
+    kmeans = cluster.KMeans(n_clusters=k)
     kmeans.fit(sig)
     return _dedup(kmeans.cluster_centers_)
 
@@ -182,7 +182,7 @@ def _autoCluster(data, mink, maxk):
     maxScore = 0.0
     bestKMeans = None
     for k in range(mink, maxk+1):
-        kmeans = cluster.KMeans(n_clusters=k, n_jobs=-1).fit(data)
+        kmeans = cluster.KMeans(n_clusters=k).fit(data)
         score = metrics.calinski_harabasz_score(data, kmeans.labels_)
         if score > maxScore:
             maxScore = score
@@ -191,14 +191,14 @@ def _autoCluster(data, mink, maxk):
     
 def _dedup(arrs):
     if arrs.shape[0] > 1:
-        prev = arrs[0]
+        _prev = arrs[0]
         dedupped = []
-        dedupped.append(prev)
+        dedupped.append(_prev)
         for k in range(1, arrs.shape[0]):
-            next = arrs[k]
-            if not np.allclose(next, prev):
-                dedupped.append(next)
-            prev = next
+            _next = arrs[k]
+            if not np.allclose(_next, _prev):
+                dedupped.append(_next)
+            _prev = _next
         return np.asarray(dedupped)
     else:
         return arrs
@@ -212,12 +212,10 @@ def code(sig, codebook, alpha):
     def expDist(i, j):
         diff = sig[i] - codebook[j]
         return np.exp(-alpha*np.inner(diff, diff))
-    for i in range(code.shape[1]):
-        total = 0.0
-        for k in range(code.shape[0]):
-            total += expDist(i, k)
-        for r in range(code.shape[0]):
-            code[i][r] = expDist(i, r)/total
+    for r in range(code.shape[0]):
+        for i in range(code.shape[1]):
+            code[r][i] = expDist(i, r)
+    code /= np.sum(code, axis=0)
     return code
 
 def histogram(code, agg=np.sum):
@@ -237,14 +235,7 @@ def bof(code, G, eps):
     K = np.exp(-G.W.toarray()/eps)
     return code @ K @ code.transpose()
 
-class LGraph(gsp.graphs.Graph):
-    def __init__(self, L, gtype='unknown', lap_type='combinatorial'):
-        self.logger = gsp.utils.build_logger(__name__)
-        self.L = L
-        self.lap_type = lap_type
-        self.N = L.shape[0]
-        self.gtype = gtype
-
+class LGraphFourier(gsp.graphs.fourier.GraphFourier):
     def compute_fourier_basis(self, recompute=False):
         if hasattr(self, '_e') and hasattr(self, '_U') and not recompute:
             return
@@ -259,15 +250,28 @@ class LGraph(gsp.graphs.Graph):
 
         self._e[np.isclose(self._e, 0)] = 0
 
-        if self.lap_type == 'normalized' and hasattr(self, '_iw'):
-            e_bound = np.max(self.iw)
-            if np.isclose(self._e[-1], e_bound):
-                self._e[-1] = e_bound
-            assert self._e[-1] <= e_bound
+        e_bound = self._get_upper_bound()
+        self._e[np.isclose(self._e, e_bound)] = e_bound
+        assert self._e[-1] <= e_bound
 
         assert np.max(self._e) == self._e[-1]
         self._lmax = self._e[-1]
         self._mu = np.max(np.abs(self._U))
+
+    def _get_upper_bound(self):
+        if self.lap_type == 'normalized' and hasattr(self, '_iw'):
+            e_bound = np.max(self.iw)
+            return e_bound
+        else:
+            return np.inf
+
+class LGraph(LGraphFourier, gsp.graphs.Graph):
+    def __init__(self, L, gtype='unknown', lap_type='combinatorial'):
+        self.logger = gsp.utils.build_logger(__name__)
+        self.L = L
+        self.lap_type = lap_type
+        self.N = L.shape[0]
+        self.gtype = gtype
 
 class Hypergraph(LGraph):
     def __init__(self, I, gtype='unknown', lap_type='combinatorial'):
@@ -330,6 +334,20 @@ class Hypergraph(LGraph):
         if self._iw is None:
             self._iw = np.asarray(np.sum(np.power(self.I.toarray(), 2), axis=0)).squeeze()
         return self._iw
+
+class BipartiteGraph(LGraphFourier, gsp.graphs.Graph):
+    def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
+        gsp.graphs.Graph.__init__(self, W, lap_type=lap_type, coords=coords, plotting=plotting)
+
+    def compute_fourier_basis(self, recompute=False):
+        LGraphFourier.compute_fourier_basis(self, recompute)
+        assert self.e[-1] == 2
+
+    def _get_upper_bound(self):
+        if self.lap_type == 'normalized':
+            return 2
+        else:
+            return np.inf
 
 class GWHeat(gsp.filters.Filter):
     """
