@@ -39,11 +39,11 @@ def gwt(f, G, kernel):
         coeffs.append(total)
     return coeffs
 
-def multiResolutionEmbedding(G, filter, R, ts, **kwargs):
+def multiResolutionEmbedding(G, filter_factory, R, ts, **kwargs):
     """
     Multi-resolution embedding (GraphWave).
     G = graph
-    filter(G, L) = kernel for G at level L, e.g. MexicanHat(G, Nf=L+1, normalize=True)
+    filter_factory(G, L) = kernel for G at level L, e.g. MexicanHat(G, Nf=L+1, normalize=True)
     R = resolution (integer for levels 1..R else iterator of levels)
     ts = np.linspace(0, 100, 25)
     """
@@ -52,13 +52,14 @@ def multiResolutionEmbedding(G, filter, R, ts, **kwargs):
     G.estimate_lmax()
     multiResEmbedding = []
     for L in R:
-        g = filter(G, L)
+        g = filter_factory(G, L)
         levelEmbedding = embedding(g, ts, **kwargs)
         multiResEmbedding.append(levelEmbedding)
     return np.concatenate(multiResEmbedding, axis=1)
 
 def embedding(g, ts, nodes = None, **kwargs):
     """
+    GraphWave embedding.
     ts = np.linspace(0, 100, 25)
     """
     if nodes is None:
@@ -68,7 +69,9 @@ def embedding(g, ts, nodes = None, **kwargs):
         for i, n in enumerate(nodes):
             s[n][i] = 1.0
     tig = g.filter(s[..., np.newaxis], **kwargs)
-    if tig.ndim == 2:
+    if s.shape[1] == 1: # single node
+        tig = tig[np.newaxis, ...]
+    if tig.ndim == 2: # single filter
         tig = tig[..., np.newaxis]
     tig_t_grid = np.kron(tig[..., np.newaxis], ts)
     def chi(xt):
@@ -103,11 +106,11 @@ def plotSignal(G, y):
     G.plot_signal(y)
     plotNodeLabels(G)
 
-def multiResolutionSignature(G, filter, R, **kwargs):
+def multiResolutionSignature(G, filter_factory, R, **kwargs):
     """
     Multi-resolution SGWs.
     G = graph
-    filter(G, L) = kernel for G at level L, e.g. MexicanHat(G, Nf=L+1, normalize=True)
+    filter_factory(G, L) = kernel for G at level L, e.g. MexicanHat(G, Nf=L+1, normalize=True)
     R = resolution (integer for levels 1..R else iterator of levels)
     """
     if type(R) == int:
@@ -115,7 +118,7 @@ def multiResolutionSignature(G, filter, R, **kwargs):
     G.estimate_lmax()
     multiResSig = []
     for L in R:
-        g = filter(G, L)
+        g = filter_factory(G, L)
         levelSig = signature(g, **kwargs)
         multiResSig.append(levelSig)
     return np.concatenate(multiResSig, axis=1)
