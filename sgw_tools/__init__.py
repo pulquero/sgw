@@ -71,13 +71,13 @@ def embedding(g, ts, nodes = None, **kwargs):
             s[n][i] = 1.0
     tig = g.filter(s[..., np.newaxis], **kwargs)
     if s.shape[1] == 1: # single node
-        tig = tig[np.newaxis, ...]
+        tig = tig[:, np.newaxis, :]
     if tig.ndim == 2: # single filter
         tig = tig[..., np.newaxis]
-    assert tig.ndim == 3
+    assert tig.shape == s.shape + (tig.shape[2],)
     tig_t_grid = np.kron(tig[..., np.newaxis], ts)
     def chi(xt):
-        return np.mean(np.exp(xt*1j), axis=1)
+        return np.mean(np.exp(xt*1j), axis=0)
     return chi(tig_t_grid)
 
 def plotEmbedding(embedding):
