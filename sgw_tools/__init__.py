@@ -61,6 +61,7 @@ def embedding(g, ts, nodes = None, **kwargs):
     """
     GraphWave embedding.
     ts = np.linspace(0, 100, 25)
+    Returns a tensor of (nodes, filters, chi)
     """
     if nodes is None:
         s = np.identity(g.G.N)
@@ -73,9 +74,10 @@ def embedding(g, ts, nodes = None, **kwargs):
         tig = tig[np.newaxis, ...]
     if tig.ndim == 2: # single filter
         tig = tig[..., np.newaxis]
+    assert tig.ndim == 3
     tig_t_grid = np.kron(tig[..., np.newaxis], ts)
     def chi(xt):
-        return np.mean(np.exp(xt*1j), axis=0)
+        return np.mean(np.exp(xt*1j), axis=1)
     return chi(tig_t_grid)
 
 def plotEmbedding(embedding):
