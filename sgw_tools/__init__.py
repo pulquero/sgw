@@ -346,7 +346,8 @@ class BipartiteGraph(LGraphFourier, gsp.graphs.Graph):
 
     def compute_fourier_basis(self, recompute=False):
         LGraphFourier.compute_fourier_basis(self, recompute)
-        assert self.e[-1] == 2
+        if self.lap_type == 'normalized':
+            assert self.e[-1] == 2
 
     def _get_upper_bound(self):
         if self.lap_type == 'normalized':
