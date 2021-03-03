@@ -12,7 +12,9 @@ import pygsp as gsp
 import sklearn.cluster as cluster
 import sklearn.metrics as metrics
 from scipy import sparse
+from scipy.linalg import eigh
 import matplotlib.pyplot as plt
+from builtins import staticmethod
 
 """
 Refs: Shape Classification using Spectral Graph Wavelets/Spectral Geometric Methods for Deformable 3D Shape Retrieval
@@ -241,7 +243,7 @@ def bof(code, G, eps):
     return code @ K @ code.transpose()
 
 class LGraphFourier(gsp.graphs.fourier.GraphFourier):
-    def compute_fourier_basis(self, recompute=False):
+    def compute_fourier_basis(self, recompute=False, spectrum_only=False):
         if hasattr(self, '_e') and hasattr(self, '_U') and not recompute:
             return
 
@@ -251,7 +253,11 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
                                 'large matrix ({0} x {0}) may take some '
                                 'time.'.format(self.N))
 
-        self._e, self._U = np.linalg.eigh(self.L.toarray())
+        if spectrum_only:
+            self._e = eigh(self.L.toarray(), eigvals_only=True, overwrite_a=True, driver='evr')
+        else:
+            self._e, self._U = eigh(self.L.toarray(), overwrite_a=True, driver='evr')
+            self._mu = np.max(np.abs(self._U))
 
         self._e[np.isclose(self._e, 0)] = 0
 
@@ -261,7 +267,6 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
 
         assert np.max(self._e) == self._e[-1]
         self._lmax = self._e[-1]
-        self._mu = np.max(np.abs(self._U))
 
     def _get_upper_bound(self):
         if self.lap_type == 'normalized' and hasattr(self, '_iw'):
@@ -339,6 +344,14 @@ class Hypergraph(LGraph):
         if self._iw is None:
             self._iw = np.asarray(np.sum(np.power(self.I.toarray(), 2), axis=0)).squeeze()
         return self._iw
+
+class BigGraph(LGraphFourier, gsp.graphs.Graph):
+    @staticmethod
+    def create_from(G):
+        return BigGraph(G.W, lap_type=G.lap_type, coords=G.coords, plotting=G.coords)
+
+    def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
+        gsp.graphs.Graph.__init__(self, W, lap_type=lap_type, coords=coords, plotting=plotting)
 
 class BipartiteGraph(LGraphFourier, gsp.graphs.Graph):
     def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
