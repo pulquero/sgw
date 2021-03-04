@@ -348,7 +348,8 @@ class Hypergraph(LGraph):
 class BigGraph(LGraphFourier, gsp.graphs.Graph):
     @staticmethod
     def create_from(G):
-        return BigGraph(G.W, lap_type=G.lap_type, coords=G.coords, plotting=G.coords)
+        coords = G.coords if hasattr(G, 'coords') else None
+        return BigGraph(G.W, lap_type=G.lap_type, coords=coords, plotting=G.plotting)
 
     def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
         gsp.graphs.Graph.__init__(self, W, lap_type=lap_type, coords=coords, plotting=plotting)
