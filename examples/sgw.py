@@ -7,7 +7,7 @@ import sgw_tools as sgw
 import matplotlib.pyplot as plt
 
 G = gsp.graphs.Comet(10, 3)
-G.compute_fourier_basis()
+G.estimate_lmax()
 g = gsp.filters.MexicanHat(G, 3, lpfactor=10)
 sig = sgw.signature(g)
 codebook = sgw.codebook(sig, 3)
@@ -15,6 +15,7 @@ code = sgw.code(sig, codebook, 0.8)
 
 from sklearn.decomposition import PCA
 
+# show codes clustered around the codebook
 pca = PCA(n_components=2)
 sig_pca = pca.fit_transform(sig)
 codebook_pca = pca.fit_transform(codebook)

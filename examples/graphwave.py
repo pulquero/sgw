@@ -6,8 +6,8 @@ import pygsp as gsp
 import sgw_tools as sgw
 import matplotlib.pyplot as plt
 
-G = sgw.BigGraph.create_from(gsp.graphs.Comet(10, 3))
-G.compute_fourier_basis(spectrum_only=True)
+G = gsp.graphs.Comet(10, 3)
+G.estimate_lmax()
 
 g = sgw.GWHeat(G)
 

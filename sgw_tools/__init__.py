@@ -254,9 +254,9 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
                                 'time.'.format(self.N))
 
         if spectrum_only:
-            self._e = eigh(self.L.toarray(), eigvals_only=True, overwrite_a=True, driver='evr')
+            self._e = eigh(self.L.toarray(order='F'), eigvals_only=True, overwrite_a=True, driver='ev')
         else:
-            self._e, self._U = eigh(self.L.toarray(), overwrite_a=True, driver='evr')
+            self._e, self._U = eigh(self.L.toarray(order='F'), overwrite_a=True, driver='evr')
             self._mu = np.max(np.abs(self._U))
 
         self._e[np.isclose(self._e, 0)] = 0
@@ -272,8 +272,10 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
         if self.lap_type == 'normalized' and hasattr(self, '_iw'):
             e_bound = np.max(self.iw)
             return e_bound
-        else:
+        elif self.lap_type == 'combinatorial':
             return np.inf
+        else:
+            raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
 
 class LGraph(LGraphFourier, gsp.graphs.Graph):
     def __init__(self, L, gtype='unknown', lap_type='combinatorial'):
@@ -357,6 +359,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 class BipartiteGraph(LGraphFourier, gsp.graphs.Graph):
     def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
         gsp.graphs.Graph.__init__(self, W, lap_type=lap_type, coords=coords, plotting=plotting)
+        self._lmax = 2
 
     def compute_fourier_basis(self, recompute=False):
         LGraphFourier.compute_fourier_basis(self, recompute)
@@ -366,19 +369,28 @@ class BipartiteGraph(LGraphFourier, gsp.graphs.Graph):
     def _get_upper_bound(self):
         if self.lap_type == 'normalized':
             return 2
+        elif self.lap_type == 'combinatorial':
+            return 2*np.max(self.dw)
         else:
-            return np.inf
+            raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
 
 class GWHeat(gsp.filters.Filter):
     """
     Heat kernel used by GraphWave.
     """
-    def __init__(self, G, Nf=2):
+    def __init__(self, G, Nf=2, approximate=False):
         def kernel(x, s):
             return np.exp(-x * s)
 
-        e_nz = G.e[np.invert(np.isclose(G.e, 0))]
-        e_mean = np.sqrt(e_nz[0] * e_nz[-1])
+        if approximate:
+            if G.lap_type == 'normalized':
+                lmin = 1.0/G.N # use approximation
+            else:
+                lmin = sparse.linalg.eigsh(G.L, 2, which='SM', return_eigenvectors=False)[0]
+        else:
+            lmin = G.e[np.invert(np.isclose(G.e, 0))][0]
+
+        e_mean = np.sqrt(lmin * G.lmax)
         s_min = -np.log(0.95) / e_mean
         s_max = -np.log(0.80) / e_mean
         scales = np.linspace(s_min, s_max, Nf)
