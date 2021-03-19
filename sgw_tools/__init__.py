@@ -59,16 +59,17 @@ def multiResolutionEmbedding(G, filter_factory, R, ts, **kwargs):
         multiResEmbedding.append(levelEmbedding)
     return np.concatenate(multiResEmbedding, axis=1)
 
-def embedding(g, ts, nodes = None, **kwargs):
+def embedding(g, ts, nodes = None, method = None, **kwargs):
     """
     GraphWave embedding.
     ts = np.linspace(0, 100, 25)
     Returns a tensor of (nodes, filters, chi)
     """
+    N = g.G.N
     if nodes is None:
-        s = np.identity(g.G.N)
+        s = np.identity(N)
     else:
-        s = np.zeros((g.G.N, len(nodes)))
+        s = np.zeros((N, len(nodes)))
         for i, n in enumerate(nodes):
             s[n][i] = 1.0
     tig = g.filter(s[..., np.newaxis], **kwargs)
@@ -77,10 +78,41 @@ def embedding(g, ts, nodes = None, **kwargs):
     if tig.ndim == 2: # single filter
         tig = tig[..., np.newaxis]
     assert tig.shape == s.shape + (tig.shape[2],)
-    tig_t_grid = np.kron(tig[..., np.newaxis], ts)
-    def chi(xt):
-        return np.mean(np.exp(xt*1j), axis=0)
-    return chi(tig_t_grid)
+
+    if method is None:
+        if N < 100:
+            method = 'kron'
+        elif N < 10000:
+            method = 'partial-kron'
+        else:
+            method = 'loop'
+
+    if method == 'kron':
+        # fully vectorized
+        tig_t_grid = np.kron(tig[..., np.newaxis], ts)
+        def chi(xt):
+            return np.mean(np.exp(xt*1j), axis=0)
+        return chi(tig_t_grid)
+    elif method == 'partial-kron':
+        # more memory efficient
+        def chi(xt):
+            return np.mean(np.exp(xt*1j), axis=0)
+        emb = np.empty((tig.shape[1], tig.shape[2], ts.shape[0]), dtype=complex)
+        for i in range(tig.shape[1]):
+            for j in range(tig.shape[2]):
+                tig_t_grid = np.kron(tig[:,i,j, np.newaxis], ts)
+                emb[i][j] = chi(tig_t_grid)
+        return emb
+    elif method == 'loop':
+        # every byte counts
+        def chi(x, t):
+            return np.mean(np.exp(x*t*1j), axis=0)
+        emb = np.empty((tig.shape[1], tig.shape[2], ts.shape[0]), dtype=complex)
+        for i in range(tig.shape[1]):
+            for j in range(tig.shape[2]):
+                for k, t in enumerate(ts):
+                    emb[i][j][k] = chi(tig[:,i,j], t)
+        return emb
 
 def plotEmbedding(embedding):
     fig, axs = plt.subplots(embedding.shape[0], embedding.shape[1], sharex='col', sharey='col')
@@ -384,9 +416,9 @@ class GWHeat(gsp.filters.Filter):
 
         if approximate:
             if G.lap_type == 'normalized':
-                lmin = 1.0/G.N # use approximation
+                lmin = 1.0/G.N
             else:
-                lmin = sparse.linalg.eigsh(G.L, 2, which='SM', return_eigenvectors=False)[0]
+                lmin = np.sum(G.dw)/G.N/G.N
         else:
             lmin = G.e[np.invert(np.isclose(G.e, 0))][0]
 

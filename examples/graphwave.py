@@ -7,7 +7,7 @@ import sgw_tools as sgw
 import matplotlib.pyplot as plt
 
 G = gsp.graphs.Comet(10, 3)
-G.estimate_lmax()
+G.compute_fourier_basis()
 
 g = sgw.GWHeat(G)
 
