@@ -7,14 +7,10 @@ import sgw_tools as sgw
 import matplotlib.pyplot as plt
 
 G = gsp.graphs.Comet(20, 11)
-G.compute_fourier_basis()
+G.estimate_lmax()
 
-g = sgw.GWHeat(G, Nf=2)
-
-ts = np.linspace(0, 100, 25)
-gw = sgw.graphWave(G, g, ts)
-data_z = gw.reshape(gw.shape[0], gw.shape[1]*gw.shape[2])
-data = np.c_[data_z.real, data_z.imag]
+g = sgw.GaussianFilter(G, Nf=100)
+data = sgw.spectrogram(G, g)
 
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
@@ -25,7 +21,7 @@ pca_data = pca.fit_transform(StandardScaler().fit_transform(data))
 km = KMeans(n_clusters=3)
 labels = km.fit_predict(pca_data)
 sgw.plotGraph(G)
-sgw.plotGraphWave(gw)
+gsp.plotting.plot_spectrogram(G)
 plt.figure()
 plt.scatter(pca_data[:,0], pca_data[:,1], s=20)
 for i in range(G.N):

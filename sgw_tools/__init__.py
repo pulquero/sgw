@@ -41,9 +41,35 @@ def gwt(f, G, kernel):
         coeffs.append(total)
     return coeffs
 
-def multiResolutionEmbedding(G, filter_factory, R, ts, **kwargs):
+def createSignal(G, nodes=None):
+    if nodes is None:
+        s = np.identity(G.N)
+    else:
+        s = np.zeros((G.N, len(nodes)))
+        for i, n in enumerate(nodes):
+            s[n][i] = 1.0
+    return s
+
+def _tig(g, s, **kwargs):
     """
-    Multi-resolution embedding (GraphWave).
+    Returns a tensor of (nodes, coeffs, filters)
+    """
+    tig = g.filter(s[..., np.newaxis], **kwargs)
+    if s.shape[1] == 1: # single node
+        tig = tig[:, np.newaxis, :]
+    if tig.ndim == 2: # single filter
+        tig = tig[..., np.newaxis]
+    assert tig.shape == s.shape + (tig.shape[2],)
+    return tig
+
+def nodeEmbedding(g, func, nodes=None, **kwargs):
+    s = createSignal(g.G, nodes)
+    tig = _tig(g, s, **kwargs)
+    return func(tig)
+
+def multiResolutionGraphWave(G, filter_factory, R, ts, **kwargs):
+    """
+    Multi-resolution GraphWave.
     G = graph
     filter_factory(G, L) = kernel for G at level L, e.g. MexicanHat(G, Nf=L+1, normalize=True)
     R = resolution (integer for levels 1..R else iterator of levels)
@@ -52,75 +78,88 @@ def multiResolutionEmbedding(G, filter_factory, R, ts, **kwargs):
     if type(R) == int:
         R = range(1, R+1)
     G.estimate_lmax()
-    multiResEmbedding = []
+    multiResGW = []
     for L in R:
         g = filter_factory(G, L)
-        levelEmbedding = embedding(g, ts, **kwargs)
-        multiResEmbedding.append(levelEmbedding)
-    return np.concatenate(multiResEmbedding, axis=1)
+        gw = graphWave(G, g, ts, **kwargs)
+        multiResGW.append(gw)
+    return np.concatenate(multiResGW, axis=1)
 
-def embedding(g, ts, nodes = None, method = None, **kwargs):
+def graphWave(G, g=None, ts=None, nodes=None, method=None, **kwargs):
     """
-    GraphWave embedding.
+    GraphWave.
     ts = np.linspace(0, 100, 25)
     Returns a tensor of (nodes, filters, chi)
     """
-    N = g.G.N
-    if nodes is None:
-        s = np.identity(N)
-    else:
-        s = np.zeros((N, len(nodes)))
-        for i, n in enumerate(nodes):
-            s[n][i] = 1.0
-    tig = g.filter(s[..., np.newaxis], **kwargs)
-    if s.shape[1] == 1: # single node
-        tig = tig[:, np.newaxis, :]
-    if tig.ndim == 2: # single filter
-        tig = tig[..., np.newaxis]
-    assert tig.shape == s.shape + (tig.shape[2],)
+    if g is None:
+        g = GWHeat(G)
+    assert g.G == G
+    if ts is None:
+        ts = np.linspace(0, 100, 25)
 
-    if method is None:
-        if N < 100:
-            method = 'kron'
-        elif N < 10000:
-            method = 'partial-kron'
-        else:
-            method = 'loop'
+    def char_func(tig, method):
+        N = tig.shape[0]
+        if method is None:
+            if N < 100:
+                method = 'kron'
+            elif N < 10000:
+                method = 'partial-kron'
+            else:
+                method = 'loop'
+    
+        if method == 'kron':
+            # fully vectorized
+            tig_t_grid = np.kron(tig[..., np.newaxis], ts)
+            def chi(xt):
+                return np.mean(np.exp(xt*1j), axis=0)
+            return chi(tig_t_grid)
+        elif method == 'partial-kron':
+            # more memory efficient
+            def chi(xt):
+                return np.mean(np.exp(xt*1j), axis=0)
+            gw = np.empty((tig.shape[1], tig.shape[2], ts.shape[0]), dtype=complex)
+            for i in range(tig.shape[1]):
+                for j in range(tig.shape[2]):
+                    tig_t_grid = np.kron(tig[:,i,j, np.newaxis], ts)
+                    gw[i][j] = chi(tig_t_grid)
+            return gw
+        elif method == 'loop':
+            # every byte counts
+            def chi(x, t):
+                return np.mean(np.exp(x*t*1j), axis=0)
+            gw = np.empty((tig.shape[1], tig.shape[2], ts.shape[0]), dtype=complex)
+            for i in range(tig.shape[1]):
+                for j in range(tig.shape[2]):
+                    for k, t in enumerate(ts):
+                        gw[i][j][k] = chi(tig[:,i,j], t)
+            return gw
 
-    if method == 'kron':
-        # fully vectorized
-        tig_t_grid = np.kron(tig[..., np.newaxis], ts)
-        def chi(xt):
-            return np.mean(np.exp(xt*1j), axis=0)
-        return chi(tig_t_grid)
-    elif method == 'partial-kron':
-        # more memory efficient
-        def chi(xt):
-            return np.mean(np.exp(xt*1j), axis=0)
-        emb = np.empty((tig.shape[1], tig.shape[2], ts.shape[0]), dtype=complex)
-        for i in range(tig.shape[1]):
-            for j in range(tig.shape[2]):
-                tig_t_grid = np.kron(tig[:,i,j, np.newaxis], ts)
-                emb[i][j] = chi(tig_t_grid)
-        return emb
-    elif method == 'loop':
-        # every byte counts
-        def chi(x, t):
-            return np.mean(np.exp(x*t*1j), axis=0)
-        emb = np.empty((tig.shape[1], tig.shape[2], ts.shape[0]), dtype=complex)
-        for i in range(tig.shape[1]):
-            for j in range(tig.shape[2]):
-                for k, t in enumerate(ts):
-                    emb[i][j][k] = chi(tig[:,i,j], t)
-        return emb
+    gw = nodeEmbedding(g, lambda tig: char_func(tig, method), nodes, **kwargs)
+    G.gw = gw
+    return gw
 
-def plotEmbedding(embedding):
-    fig, axs = plt.subplots(embedding.shape[0], embedding.shape[1], sharex='col', sharey='col')
-    for n in range(embedding.shape[0]):
-        for f in range(embedding.shape[1]):
-            x = np.real(embedding[n][f])
-            y = np.imag(embedding[n][f])
-            if embedding.shape[1] > 1:
+def spectrogram(G, g=None, nodes=None, **kwargs):
+    if g is None:
+        g = GaussianFilter(G)
+    assert g.G == G
+    norm_sqr_func = lambda tig: np.linalg.norm(tig, axis=0, ord=2)**2
+    spectr = nodeEmbedding(g, norm_sqr_func, nodes, **kwargs)
+    G.spectr = spectr
+    return spectr
+
+def plotGraphWave(gw):
+    if isinstance(gw, gsp.graphs.Graph):
+        G = gw
+        if not hasattr(G, 'gw'):
+            graphWave(G)
+        gw = G.gw
+
+    fig, axs = plt.subplots(gw.shape[0], gw.shape[1], sharex='col', sharey='col')
+    for n in range(gw.shape[0]):
+        for f in range(gw.shape[1]):
+            x = np.real(gw[n][f])
+            y = np.imag(gw[n][f])
+            if gw.shape[1] > 1:
                 axs[n][f].plot(x, y)
             else:
                 axs[n].plot(x, y)
@@ -427,5 +466,18 @@ class GWHeat(gsp.filters.Filter):
         s_max = -np.log(0.80) / e_mean
         scales = np.linspace(s_min, s_max, Nf)
         kernels = [lambda x, s=s: kernel(x, s) for s in scales]
+
+        gsp.filters.Filter.__init__(self, G, kernels)
+
+class GaussianFilter(gsp.filters.Filter):
+    """
+    Filter used by spectrogram.
+    """
+    def __init__(self, G, Nf=100):
+        def kernel(x):
+            return np.exp(-Nf * (x/G.lmax)**2)
+
+        scales = np.linspace(0, G.lmax, Nf)
+        kernels = [lambda x, s=s: kernel(x - s) for s in scales]
 
         gsp.filters.Filter.__init__(self, G, kernels)
