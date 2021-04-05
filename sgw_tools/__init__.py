@@ -85,10 +85,11 @@ def multiResolutionGraphWave(G, filter_factory, R, ts, **kwargs):
         multiResGW.append(gw)
     return np.concatenate(multiResGW, axis=1)
 
-def graphWave(G, g=None, ts=None, nodes=None, method=None, **kwargs):
+def graphWave(G, g=None, ts=None, nodes=None, ecf_method=None, **kwargs):
     """
     GraphWave.
     ts = np.linspace(0, 100, 25)
+    ecf_method = method to calculate the empirical characteristic function
     Returns a tensor of (nodes, filters, chi)
     """
     if g is None:
@@ -97,23 +98,23 @@ def graphWave(G, g=None, ts=None, nodes=None, method=None, **kwargs):
     if ts is None:
         ts = np.linspace(0, 100, 25)
 
-    def char_func(tig, method):
+    def char_func(tig, ecf_method):
         N = tig.shape[0]
-        if method is None:
+        if ecf_method is None:
             if N < 100:
-                method = 'kron'
+                ecf_method = 'kron'
             elif N < 10000:
-                method = 'partial-kron'
+                ecf_method = 'partial-kron'
             else:
-                method = 'loop'
+                ecf_method = 'loop'
     
-        if method == 'kron':
+        if ecf_method == 'kron':
             # fully vectorized
             tig_t_grid = np.kron(tig[..., np.newaxis], ts)
             def chi(xt):
                 return np.mean(np.exp(xt*1j), axis=0)
             return chi(tig_t_grid)
-        elif method == 'partial-kron':
+        elif ecf_method == 'partial-kron':
             # more memory efficient
             def chi(xt):
                 return np.mean(np.exp(xt*1j), axis=0)
@@ -123,7 +124,7 @@ def graphWave(G, g=None, ts=None, nodes=None, method=None, **kwargs):
                     tig_t_grid = np.kron(tig[:,i,j, np.newaxis], ts)
                     gw[i][j] = chi(tig_t_grid)
             return gw
-        elif method == 'loop':
+        elif ecf_method == 'loop':
             # every byte counts
             def chi(x, t):
                 return np.mean(np.exp(x*t*1j), axis=0)
@@ -134,13 +135,13 @@ def graphWave(G, g=None, ts=None, nodes=None, method=None, **kwargs):
                         gw[i][j][k] = chi(tig[:,i,j], t)
             return gw
 
-    gw = nodeEmbedding(g, lambda tig: char_func(tig, method), nodes, **kwargs)
+    gw = nodeEmbedding(g, lambda tig: char_func(tig, ecf_method), nodes, **kwargs)
     G.gw = gw
     return gw
 
 def spectrogram(G, g=None, nodes=None, **kwargs):
     if g is None:
-        g = GaussianFilter(G)
+        g = ShiftedGaussianFilter(G)
     assert g.G == G
     norm_sqr_func = lambda tig: np.linalg.norm(tig, axis=0, ord=2)**2
     spectr = nodeEmbedding(g, norm_sqr_func, nodes, **kwargs)
@@ -469,7 +470,7 @@ class GWHeat(gsp.filters.Filter):
 
         gsp.filters.Filter.__init__(self, G, kernels)
 
-class GaussianFilter(gsp.filters.Filter):
+class ShiftedGaussianFilter(gsp.filters.Filter):
     """
     Filter used by spectrogram.
     """
