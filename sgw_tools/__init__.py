@@ -139,10 +139,11 @@ def graphWave(G, g=None, ts=None, nodes=None, ecf_method=None, **kwargs):
     G.gw = gw
     return gw
 
-def spectrogram(G, g=None, nodes=None, **kwargs):
+def spectrogram(G, g=None, M=100, nodes=None, **kwargs):
     if g is None:
-        g = ShiftedGaussianFilter(G)
+        g = GaussianFilter(G, M)
     assert g.G == G
+    g = ShiftedFilter(g, M)
     norm_sqr_func = lambda tig: np.linalg.norm(tig, axis=0, ord=2)**2
     spectr = nodeEmbedding(g, norm_sqr_func, nodes, **kwargs)
     G.spectr = spectr
@@ -470,15 +471,23 @@ class GWHeat(gsp.filters.Filter):
 
         gsp.filters.Filter.__init__(self, G, kernels)
 
-class ShiftedGaussianFilter(gsp.filters.Filter):
+class GaussianFilter(gsp.filters.Filter):
     """
     Filter used by spectrogram.
     """
-    def __init__(self, G, Nf=100):
+    def __init__(self, G, M=100):
         def kernel(x):
-            return np.exp(-Nf * (x/G.lmax)**2)
+            return np.exp(-M * (x/G.lmax)**2)
 
-        scales = np.linspace(0, G.lmax, Nf)
-        kernels = [lambda x, s=s: kernel(x - s) for s in scales]
+        gsp.filters.Filter.__init__(self, G, [kernel])
+
+class ShiftedFilter(gsp.filters.Filter):
+    """
+    Filter used by spectrogram.
+    """
+    def __init__(self, g, Nf=100):
+        G = g.G
+        shifts = np.linspace(0, G.lmax, Nf)
+        kernels = [lambda x, kernel=kernel, s=s: kernel(x - s) for s in shifts for kernel in g._kernels]
 
         gsp.filters.Filter.__init__(self, G, kernels)

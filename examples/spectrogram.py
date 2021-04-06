@@ -9,8 +9,9 @@ import matplotlib.pyplot as plt
 G = gsp.graphs.Comet(20, 11)
 G.estimate_lmax()
 
-g = sgw.GaussianFilter(G, Nf=100)
-data = sgw.spectrogram(G, g)
+M = 100
+g = sgw.GaussianFilter(G, M)
+data = sgw.spectrogram(G, g, M)
 
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
