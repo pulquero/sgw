@@ -149,6 +149,14 @@ def spectrogram(G, g=None, M=100, nodes=None, **kwargs):
     G.spectr = spectr
     return spectr
 
+def kernelCentrality(G, g=None, nodes=None, **kwargs):
+    if g is None:
+        g = gsp.filters.Heat(G)
+    norm_sqr_func = lambda tig: np.linalg.norm(tig, axis=0, ord=2)**2
+    centr = nodeEmbedding(g, norm_sqr_func, nodes, **kwargs)
+    G.centr = centr
+    return centr
+
 def plotGraphWave(gw):
     if isinstance(gw, gsp.graphs.Graph):
         G = gw

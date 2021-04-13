@@ -1,7 +1,6 @@
 import sys
 sys.path.append(".")
 
-import numpy as np
 import pygsp as gsp
 import sgw_tools as sgw
 import matplotlib.pyplot as plt
