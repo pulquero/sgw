@@ -470,7 +470,7 @@ class GWHeat(gsp.filters.Filter):
             lmin = G.lmin
         else:
             if approximate:
-                lmin = sparse.linalg.eigsh(G.L, 2, which='SM', return_eigenvectors=False)[1]
+                lmin = sparse.linalg.eigsh(G.L, 2, which='SM', return_eigenvectors=False)[0]
                 assert not np.isclose(lmin, 0)
             else:
                 lmin = G.e[np.invert(np.isclose(G.e, 0))][0]
