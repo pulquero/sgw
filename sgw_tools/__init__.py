@@ -460,21 +460,27 @@ class GWHeat(gsp.filters.Filter):
     Heat kernel used by GraphWave.
     """
     def __init__(self, G, Nf=2, approximate=False):
+        if G.lap_type != 'combinatorial':
+            raise Exception('Designed for use with the combinatorial Laplacian')
+
         def kernel(x, s):
             return np.exp(-x * s)
 
-        if approximate:
-            if G.lap_type == 'normalized':
-                lmin = 1.0/G.N
-            else:
-                lmin = np.sum(G.dw)/G.N/G.N
+        if hasattr(G, 'lmin'):
+            lmin = G.lmin
         else:
-            lmin = G.e[np.invert(np.isclose(G.e, 0))][0]
+            if approximate:
+                lmin = sparse.linalg.eigsh(G.L, 2, which='SM', return_eigenvectors=False)[1]
+                assert not np.isclose(lmin, 0)
+            else:
+                lmin = G.e[np.invert(np.isclose(G.e, 0))][0]
+            G.lmin = lmin
 
         e_mean = np.sqrt(lmin * G.lmax)
         s_min = -np.log(0.95) / e_mean
         s_max = -np.log(0.80) / e_mean
-        scales = np.linspace(s_min, s_max, Nf)
+        # log scale
+        scales = np.exp(np.linspace(np.log(s_min), np.log(s_max), Nf))
         kernels = [lambda x, s=s: kernel(x, s) for s in scales]
 
         gsp.filters.Filter.__init__(self, G, kernels)
