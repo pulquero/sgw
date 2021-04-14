@@ -23,6 +23,7 @@ labels = km.fit_predict(pca_data)
 sgw.plotGraph(G)
 gsp.plotting.plot_spectrogram(G)
 plt.figure()
+plt.title('Spectrogram PCA')
 plt.scatter(pca_data[:,0], pca_data[:,1], s=20)
 for i in range(G.N):
     plt.gca().annotate(str(i), (pca_data[i,0], pca_data[i,1]))
