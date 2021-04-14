@@ -324,7 +324,7 @@ def bof(code, G, eps):
     K = np.exp(-G.W.toarray()/eps)
     return code @ K @ code.transpose()
 
-def estimate_lmin(G):
+def estimate_lmin(G, maxiter=2000):
     N = G.N
     approx_evecs = np.empty((N, 2))
     # 0-eigenvector (exact)
@@ -338,7 +338,9 @@ def estimate_lmin(G):
     if N&1:
         approx_evecs[neg_one_idxs[-1],1] = 0
 
-    evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, largest=False)
+    # simple pre-conditioner
+    M = sparse.spdiags(1/G.L.diagonal(), 0, N, N)
+    evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, M=M, largest=False, maxiter=maxiter)
     lmin = evals[1]
     assert not np.isclose(lmin, 0)
     return lmin
@@ -480,7 +482,7 @@ class GWHeat(gsp.filters.Filter):
     """
     Heat kernel used by GraphWave.
     """
-    def __init__(self, G, Nf=2, approximate=False, gamma=0.95, eta=0.85):
+    def __init__(self, G, Nf=2, approximate=False, gamma=0.95, eta=0.85, maxiter=2000):
         def kernel(x, s):
             return np.exp(-x * s)
 
@@ -491,7 +493,7 @@ class GWHeat(gsp.filters.Filter):
                 G.logger.warning('Large matrix ({0} x {0}) detected - using faster approximation'.format(self.N))
                 approximate = True
             if approximate:
-                lmin = estimate_lmin(G)
+                lmin = estimate_lmin(G, maxiter=maxiter)
             else:
                 lmin = G.e[np.invert(np.isclose(G.e, 0))][0]
             G._lmin = lmin
