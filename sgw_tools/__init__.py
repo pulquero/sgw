@@ -1,8 +1,8 @@
 """
-0912.3848
-1705.06250
-1710.10321
-1808.10650
+0912.3848 Wavelets on Graphs via Spectral Graph Theory
+1705.06250 Shape Classification using Spectral Graph Wavelets
+1710.10321 Learning Structural Node Embeddings Via Diffusion Wavelets
+1808.10650 Graph reduction with spectral and cut guarantees
 Li_MSc_F2013 Spectral Geometric Methods for Deformable 3D Shape Retrieval
 Ch1 Spectral Graph Theory
 paperVC13 A multiresolution descriptor for deformable 3D shape retrieval
@@ -157,6 +157,22 @@ def kernelCentrality(G, g=None, nodes=None, **kwargs):
     G.centr = centr
     return centr
 
+def plotTig(tig):
+    if isinstance(tig, gsp.filters.Filter):
+        g = tig
+        tig = _tig(g, createSignal(g.G))
+
+    fig, axs = plt.subplots(tig.shape[0], tig.shape[2], sharex='col', sharey='col')
+    fig.suptitle('{} wavelet coefficients'.format(g.__class__.__name__))
+    for n in range(tig.shape[0]):
+        for f in range(tig.shape[2]):
+            if tig.shape[2] > 1:
+                axs[n][f].plot(tig[n,:,f])
+            else:
+                axs[n].plot(tig[n,:,f])
+    fig.show()
+    return fig
+
 def plotGraphWave(gw):
     if isinstance(gw, gsp.graphs.Graph):
         G = gw
@@ -165,6 +181,7 @@ def plotGraphWave(gw):
         gw = G.gw
 
     fig, axs = plt.subplots(gw.shape[0], gw.shape[1], sharex='col', sharey='col')
+    fig.suptitle('ECF')
     for n in range(gw.shape[0]):
         for f in range(gw.shape[1]):
             x = np.real(gw[n][f])

@@ -11,6 +11,8 @@ G.compute_fourier_basis()
 
 g = sgw.GWHeat(G, Nf=2)
 
+sgw.plotTig(g)
+
 ts = np.linspace(0, 100, 25)
 gw = sgw.graphWave(G, g, ts)
 data_z = gw.reshape(gw.shape[0], gw.shape[1]*gw.shape[2])
@@ -27,6 +29,7 @@ labels = km.fit_predict(pca_data)
 sgw.plotGraph(G)
 sgw.plotGraphWave(gw)
 plt.figure()
+plt.title('GraphWave PCA')
 plt.scatter(pca_data[:,0], pca_data[:,1], s=20)
 for i in range(G.N):
     plt.gca().annotate(str(i), (pca_data[i,0], pca_data[i,1]))

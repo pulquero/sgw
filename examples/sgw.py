@@ -19,6 +19,7 @@ from sklearn.decomposition import PCA
 pca = PCA(n_components=2)
 sig_pca = pca.fit_transform(sig)
 codebook_pca = pca.fit_transform(codebook)
+plt.title('SGWS PCA')
 plt.scatter(sig_pca[:,0], sig_pca[:,1])
 plt.scatter(codebook_pca[:,0], codebook_pca[:,1])
 plt.show()
