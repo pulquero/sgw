@@ -4,6 +4,7 @@ sys.path.append(".")
 import numpy as np
 import pygsp as gsp
 import sgw_tools as sgw
+import matplotlib.pyplot as plt
 
 G = gsp.graphs.Comet(20, 11)
 G.estimate_lmax()
@@ -15,4 +16,5 @@ nodes = np.arange(G.N)
 ranking = sorted(nodes, key=lambda v: 1/data[v], reverse=True)
 
 sgw.plotGraph(G)
-print(ranking)
+print(["{} ({:.3f})".format(r,data[i]) for i, r in enumerate(ranking)])
+plt.show()

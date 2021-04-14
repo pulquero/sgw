@@ -152,7 +152,7 @@ def spectrogram(G, g=None, M=100, nodes=None, **kwargs):
 def kernelCentrality(G, g=None, nodes=None, **kwargs):
     if g is None:
         g = gsp.filters.Heat(G)
-    norm_sqr_func = lambda tig: np.linalg.norm(tig, axis=0, ord=2)**2
+    norm_sqr_func = lambda tig: (np.linalg.norm(tig, axis=0, ord=2)**2).flatten()
     centr = nodeEmbedding(g, norm_sqr_func, nodes, **kwargs)
     G.centr = centr
     return centr
@@ -184,6 +184,7 @@ def plotNodeLabels(G):
 def plotGraph(G):
     G.set_coordinates()
     G.plot()
+    plt.axis('off')
     plotNodeLabels(G)
 
 def plotSignal(G, y):
@@ -323,6 +324,25 @@ def bof(code, G, eps):
     K = np.exp(-G.W.toarray()/eps)
     return code @ K @ code.transpose()
 
+def estimate_lmin(G):
+    N = G.N
+    approx_evecs = np.empty((N, 2))
+    # 0-eigenvector (exact)
+    approx_evecs[:,0] = 1
+    # 1st eigenvector (guess)
+    idxs = np.arange(N)
+    one_idxs = np.random.choice(idxs, N//2, replace=False)
+    neg_one_idxs = idxs[np.isin(idxs, one_idxs, assume_unique=True, invert=True)]
+    approx_evecs[one_idxs,1] = 1
+    approx_evecs[neg_one_idxs,1] = -1
+    if N&1:
+        approx_evecs[neg_one_idxs[-1],1] = 0
+
+    evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, largest=False)
+    lmin = evals[1]
+    assert not np.isclose(lmin, 0)
+    return lmin
+
 class LGraphFourier(gsp.graphs.fourier.GraphFourier):
     def compute_fourier_basis(self, recompute=False, spectrum_only=False):
         if hasattr(self, '_e') and hasattr(self, '_U') and not recompute:
@@ -341,12 +361,13 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
             self._mu = np.max(np.abs(self._U))
 
         self._e[np.isclose(self._e, 0)] = 0
+        self._lmin = self._e[np.where(self._e>0)][0]
 
         e_bound = self._get_upper_bound()
+        e_max = np.max(self._e)
+        assert e_max == self._e[-1]
+        assert e_max <= e_bound
         self._e[np.isclose(self._e, e_bound)] = e_bound
-        assert self._e[-1] <= e_bound
-
-        assert np.max(self._e) == self._e[-1]
         self._lmax = self._e[-1]
 
     def _get_upper_bound(self):
@@ -459,26 +480,26 @@ class GWHeat(gsp.filters.Filter):
     """
     Heat kernel used by GraphWave.
     """
-    def __init__(self, G, Nf=2, approximate=False):
-        if G.lap_type != 'combinatorial':
-            raise Exception('Designed for use with the combinatorial Laplacian')
-
+    def __init__(self, G, Nf=2, approximate=False, gamma=0.95, eta=0.85):
         def kernel(x, s):
             return np.exp(-x * s)
 
-        if hasattr(G, 'lmin'):
-            lmin = G.lmin
+        if hasattr(G, '_lmin'):
+            lmin = G._lmin
         else:
+            if not approximate and G.N > 3000:
+                G.logger.warning('Large matrix ({0} x {0}) detected - using faster approximation'.format(self.N))
+                approximate = True
             if approximate:
-                lmin = sparse.linalg.eigsh(G.L, 2, which='SM', return_eigenvectors=False)[0]
-                assert not np.isclose(lmin, 0)
+                lmin = estimate_lmin(G)
             else:
                 lmin = G.e[np.invert(np.isclose(G.e, 0))][0]
-            G.lmin = lmin
+            G._lmin = lmin
 
         e_mean = np.sqrt(lmin * G.lmax)
-        s_min = -np.log(0.95) / e_mean
-        s_max = -np.log(0.80) / e_mean
+        s_min = -np.log(gamma) / e_mean
+        s_max = -np.log(eta) / e_mean
+        assert s_min < s_max
         # log scale
         scales = np.exp(np.linspace(np.log(s_min), np.log(s_max), Nf))
         kernels = [lambda x, s=s: kernel(x, s) for s in scales]
