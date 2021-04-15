@@ -382,12 +382,12 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
         self._e[np.isclose(self._e, 0)] = 0
         self._lmin = self._e[np.where(self._e>0)][0]
 
-        e_max = np.max(self._e)
-        assert e_max == self._e[-1]
         e_bound = self._get_upper_bound()
         self._e[np.isclose(self._e, e_bound)] = e_bound
+        e_max = np.max(self._e)
+        assert e_max == self._e[-1]
         assert e_max <= e_bound, "Maximum eigenvalue was {} but upper bound is {}".format(e_max, e_bound)
-        self._lmax = self._e[-1]
+        self._lmax = e_max
 
     def _get_upper_bound(self):
         max_edge_degree = np.max(self.iw)
