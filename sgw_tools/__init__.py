@@ -45,6 +45,9 @@ def createSignal(G, nodes=None):
     if nodes is None:
         s = np.identity(G.N)
     else:
+        if not hasattr(nodes, '__iter__'):
+            nodes = [nodes]
+
         s = np.zeros((G.N, len(nodes)))
         for i, n in enumerate(nodes):
             s[n][i] = 1.0
@@ -139,11 +142,17 @@ def graphWave(G, g=None, ts=None, nodes=None, ecf_method=None, **kwargs):
     G.gw = gw
     return gw
 
-def spectrogram(G, g=None, M=100, nodes=None, **kwargs):
+def spectrogram(G, g=None, M=100, shifts=None, nodes=None, **kwargs):
     if g is None:
         g = GaussianFilter(G, M)
     assert g.G == G
-    g = ShiftedFilter(g, M)
+
+    if shifts is None:
+        Nf = M
+    else:
+        Nf = len(shifts)
+    g = ShiftedFilter(g, Nf, shifts)
+
     norm_sqr_func = lambda tig: np.linalg.norm(tig, axis=0, ord=2)**2
     spectr = nodeEmbedding(g, norm_sqr_func, nodes, **kwargs)
     G.spectr = spectr
@@ -541,9 +550,15 @@ class ShiftedFilter(gsp.filters.Filter):
     """
     Filter used by spectrogram.
     """
-    def __init__(self, g, Nf=100):
+    def __init__(self, g, Nf=100, shifts=None):
         G = g.G
-        shifts = np.linspace(0, G.lmax, Nf)
+
+        if shifts is None:
+            shifts = np.linspace(0, G.lmax, Nf)
+
+        if len(shifts) != Nf:
+            raise ValueError('len(shifts) should be Nf.')
+
         kernels = [lambda x, kernel=kernel, s=s: kernel(x - s) for s in shifts for kernel in g._kernels]
 
         super().__init__(G, kernels)
