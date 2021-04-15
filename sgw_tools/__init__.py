@@ -382,19 +382,21 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
         self._e[np.isclose(self._e, 0)] = 0
         self._lmin = self._e[np.where(self._e>0)][0]
 
-        e_bound = self._get_upper_bound()
         e_max = np.max(self._e)
         assert e_max == self._e[-1]
-        assert e_max <= e_bound
+        e_bound = self._get_upper_bound()
         self._e[np.isclose(self._e, e_bound)] = e_bound
+        assert e_max <= e_bound, "Maximum eigenvalue was {} but upper bound is {}".format(e_max, e_bound)
         self._lmax = self._e[-1]
 
     def _get_upper_bound(self):
+        max_edge_degree = np.max(self.iw)
         if self.lap_type == 'normalized' and hasattr(self, '_iw'):
-            e_bound = np.max(self.iw)
-            return e_bound
+            return max_edge_degree
         elif self.lap_type == 'combinatorial':
-            return np.inf
+            max_vertex_degree = np.max(self.dw)
+            e_bound = max_edge_degree*max_vertex_degree
+            return e_bound
         else:
             raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
 
@@ -475,17 +477,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         return BigGraph(G.W, lap_type=G.lap_type, coords=coords, plotting=G.plotting)
 
     def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
-        gsp.graphs.Graph.__init__(self, W, lap_type=lap_type, coords=coords, plotting=plotting)
-
-class BipartiteGraph(LGraphFourier, gsp.graphs.Graph):
-    def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
-        gsp.graphs.Graph.__init__(self, W, lap_type=lap_type, coords=coords, plotting=plotting)
-        self._lmax = 2
-
-    def compute_fourier_basis(self, recompute=False):
-        LGraphFourier.compute_fourier_basis(self, recompute)
-        if self.lap_type == 'normalized':
-            assert self.e[-1] == 2
+        super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
 
     def _get_upper_bound(self):
         if self.lap_type == 'normalized':
@@ -494,6 +486,16 @@ class BipartiteGraph(LGraphFourier, gsp.graphs.Graph):
             return 2*np.max(self.dw)
         else:
             raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
+
+class BipartiteGraph(BigGraph):
+    def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
+        super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
+        self._lmax = 2
+
+    def compute_fourier_basis(self, recompute=False):
+        LGraphFourier.compute_fourier_basis(self, recompute)
+        if self.lap_type == 'normalized':
+            assert self.e[-1] == 2
 
 class GWHeat(gsp.filters.Filter):
     """
@@ -507,7 +509,7 @@ class GWHeat(gsp.filters.Filter):
             lmin = G._lmin
         else:
             if not approximate and G.N > 3000:
-                G.logger.warning('Large matrix ({0} x {0}) detected - using faster approximation'.format(self.N))
+                G.logger.warning('Large matrix ({0} x {0}) detected - using faster approximation'.format(G.N))
                 approximate = True
             if approximate:
                 lmin = estimate_lmin(G, maxiter=maxiter)
@@ -523,7 +525,7 @@ class GWHeat(gsp.filters.Filter):
         scales = np.exp(np.linspace(np.log(s_min), np.log(s_max), Nf))
         kernels = [lambda x, s=s: kernel(x, s) for s in scales]
 
-        gsp.filters.Filter.__init__(self, G, kernels)
+        super().__init__(G, kernels)
 
 class GaussianFilter(gsp.filters.Filter):
     """
@@ -533,7 +535,7 @@ class GaussianFilter(gsp.filters.Filter):
         def kernel(x):
             return np.exp(-M * (x/G.lmax)**2)
 
-        gsp.filters.Filter.__init__(self, G, [kernel])
+        super().__init__(G, [kernel])
 
 class ShiftedFilter(gsp.filters.Filter):
     """
@@ -544,4 +546,4 @@ class ShiftedFilter(gsp.filters.Filter):
         shifts = np.linspace(0, G.lmax, Nf)
         kernels = [lambda x, kernel=kernel, s=s: kernel(x - s) for s in shifts for kernel in g._kernels]
 
-        gsp.filters.Filter.__init__(self, G, kernels)
+        super().__init__(G, kernels)
