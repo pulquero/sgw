@@ -55,7 +55,7 @@ def createSignal(G, nodes=None):
 
 def _tig(g, s, **kwargs):
     """
-    Returns a tensor of (nodes, coeffs, filters)
+    Returns a tensor of (coeffs, nodes, filters)
     """
     tig = g.filter(s[..., np.newaxis], **kwargs)
     if s.shape[1] == 1: # single node
