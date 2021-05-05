@@ -509,14 +509,12 @@ class BipartiteGraph(BigGraph):
 class GWHeat(gsp.filters.Filter):
     """
     Heat kernel used by GraphWave.
+    normalize helps maintain a consistent sampling of the ECF across different filter scales,
+        but at the cost of calculating all the eigenvalues.
     """
-    def __init__(self, G, Nf=2, scale=False, normalize=False, gamma=0.95, eta=0.85, approximate=False, maxiter=2000):
-        if scale:
-            def kernel(x, s):
-                return np.exp(-x * s / G.lmax)
-        else:
-            def kernel(x, s):
-                return np.exp(-x * s)
+    def __init__(self, G, Nf=2, normalize=False, gamma=0.95, eta=0.85, approximate=False, maxiter=2000):
+        def kernel(x, s):
+            return np.exp(-x * s)
 
         if hasattr(G, '_lmin'):
             lmin = G._lmin
