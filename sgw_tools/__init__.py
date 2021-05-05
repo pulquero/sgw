@@ -510,9 +510,13 @@ class GWHeat(gsp.filters.Filter):
     """
     Heat kernel used by GraphWave.
     """
-    def __init__(self, G, Nf=2, approximate=False, gamma=0.95, eta=0.85, maxiter=2000):
-        def kernel(x, s):
-            return np.exp(-x * s)
+    def __init__(self, G, Nf=2, scale=False, normalize=False, gamma=0.95, eta=0.85, approximate=False, maxiter=2000):
+        if scale:
+            def kernel(x, s):
+                return np.exp(-x * s / G.lmax)
+        else:
+            def kernel(x, s):
+                return np.exp(-x * s)
 
         if hasattr(G, '_lmin'):
             lmin = G._lmin
@@ -532,7 +536,13 @@ class GWHeat(gsp.filters.Filter):
         assert s_min < s_max
         # log scale
         scales = np.exp(np.linspace(np.log(s_min), np.log(s_max), Nf))
-        kernels = [lambda x, s=s: kernel(x, s) for s in scales]
+        kernels = []
+        for s in scales:
+            if normalize:
+                norm = np.linalg.norm(kernel(G.e, s))
+                kernels.append(lambda x, s=s, norm=norm: kernel(x, s)/norm)
+            else:
+                kernels.append(lambda x, s=s: kernel(x, s))
 
         super().__init__(G, kernels)
 
