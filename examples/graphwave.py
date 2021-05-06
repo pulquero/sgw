@@ -15,8 +15,7 @@ sgw.plotTig(g)
 
 ts = np.linspace(0, 100, 25)
 gw = sgw.graphWave(G, g, ts)
-data_z = gw.reshape(gw.shape[0], gw.shape[1]*gw.shape[2])
-data = np.c_[data_z.real, data_z.imag]
+data = sgw.gw_flatten(gw)
 
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
