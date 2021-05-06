@@ -142,6 +142,10 @@ def graphWave(G, g=None, ts=None, nodes=None, ecf_method=None, **kwargs):
     G.gw = gw
     return gw
 
+def gw_flatten(gw):
+    data_z = gw.reshape(gw.shape[0], gw.shape[1]*gw.shape[2])
+    return np.c_[data_z.real, data_z.imag]
+
 def spectrogram(G, g=None, M=100, shifts=None, nodes=None, **kwargs):
     if g is None:
         g = GaussianFilter(G, M)
