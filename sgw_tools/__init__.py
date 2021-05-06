@@ -166,19 +166,30 @@ def kernelCentrality(G, g=None, nodes=None, **kwargs):
     G.centr = centr
     return centr
 
-def plotTig(tig):
+def plotTig(tig, nodes=None):
     if isinstance(tig, gsp.filters.Filter):
         g = tig
         tig = _tig(g, createSignal(g.G))
 
-    fig, axs = plt.subplots(tig.shape[0], tig.shape[2], sharex='col', sharey='col')
+    if nodes is None:
+        nodes = range(tig.shape[0])
+    elif not hasattr(nodes, '__iter__'):
+        nodes = [nodes]
+
+    num_nodes = len(nodes)
+    num_filters = tig.shape[2]
+    fig, axs = plt.subplots(num_nodes, num_filters, sharex='col', sharey='col')
     fig.suptitle('{} wavelet coefficients'.format(g.__class__.__name__))
-    for n in range(tig.shape[0]):
-        for f in range(tig.shape[2]):
-            if tig.shape[2] > 1:
-                axs[n][f].plot(tig[n,:,f])
+    for i, n in enumerate(nodes):
+        for f in range(num_filters):
+            if num_nodes > 1 and num_filters > 1:
+                axs[i][f].plot(tig[n,:,f])
+            elif num_nodes == 1 and num_filters > 1:
+                axs[f].plot(tig[n,:,f])
+            elif num_nodes > 1 and num_filters == 1:
+                axs[i].plot(tig[n,:,f])
             else:
-                axs[n].plot(tig[n,:,f])
+                axs.plot(tig[n,:,f])
     fig.show()
     return fig
 
