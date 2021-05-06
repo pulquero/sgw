@@ -506,6 +506,10 @@ class BipartiteGraph(BigGraph):
         if self.lap_type == 'normalized':
             assert self.e[-1] == 2
 
+class StarGraph(gsp.graphs.Comet):
+    def __init__(self, N):
+        super().__init__(N, N-1)
+
 class GWHeat(gsp.filters.Filter):
     """
     Heat kernel used by GraphWave.
