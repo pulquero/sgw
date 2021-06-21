@@ -390,7 +390,10 @@ def bof(code, G, eps):
     return code @ K @ code.transpose()
 
 
-def connected_components(G):
+def count_components(G):
+    if G.is_directed():
+        raise NotImplementedError('Directed graphs not supported yet.')
+
     unvisited = set(range(G.W.shape[0]))
     count = 0
     while unvisited:
@@ -404,12 +407,32 @@ def connected_components(G):
     return count
 
 
-def estimate_lmin(G, maxiter=2000):
-    if not hasattr(G, '_ccs'):
-        G._ccs = connected_components(G)
+def extract_components(G):
+    if G.is_directed():
+        raise NotImplementedError('Directed graphs not supported yet.')
+
+    unvisited = set(range(G.W.shape[0]))
+    subgraphs = []
+    while unvisited:
+        stack = [next(iter(unvisited))]
+        comp = []
+        while len(stack):
+            v = stack.pop()
+            if v in unvisited:
+                unvisited.remove(v)
+                comp.append(v)
+                stack.extend(G.W[v].nonzero()[1])
+        comp = sorted(comp)
+        subG = G.subgraph(comp)
+        subG.info = {'orig_idx': comp}
+        subgraphs.append(subG)
+    return subgraphs
+
+
+def _estimate_lmin(G, maxiter):
     N = G.N
-    approx_evecs = np.empty((N, G._ccs+1))
-    # 0-eigenvectors (exact)
+    approx_evecs = np.empty((N, 2))
+    # 0-eigenvector (exact)
     approx_evecs[:,:-1] = 1
     # 1st non-zero eigenvector (guess)
     idxs = np.arange(N)
@@ -424,8 +447,16 @@ def estimate_lmin(G, maxiter=2000):
     M = sparse.spdiags(1/G.L.diagonal(), 0, N, N)
     evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, M=M, largest=False, maxiter=maxiter)
     lmin = evals[-1]
-    assert not np.isclose(lmin, 0)
+    assert not np.isclose(lmin, 0), "Last eigenvalue is (close to) zero: {}".format(lmin)
     return lmin
+
+
+def estimate_lmin(G, maxiter=2000):
+    lmins = []
+    for subG in G.extract_components():
+        lmin = _estimate_lmin(subG, maxiter)
+        lmins.append(lmin)
+    return sorted(lmins)[0]
 
 
 class LGraphFourier(gsp.graphs.fourier.GraphFourier):
@@ -451,8 +482,8 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
         e_bound = self._get_upper_bound()
         self._e[np.isclose(self._e, e_bound)] = e_bound
         e_max = np.max(self._e)
-        assert e_max == self._e[-1]
-        assert e_max <= e_bound, "Maximum eigenvalue was {} but upper bound is {}".format(e_max, e_bound)
+        assert e_max == self._e[-1], "Last eigenvalue is not the largest"
+        assert e_max <= e_bound, "Largest eigenvalue was {} but upper bound is {}".format(e_max, e_bound)
         self._lmax = e_max
 
     def _get_upper_bound(self):
@@ -547,6 +578,8 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
     def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
         super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
+        self._lmin = None
+        self._n_connected = None
 
     def _get_upper_bound(self):
         if self.lap_type == 'normalized':
@@ -555,6 +588,32 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             return 2*np.max(self.dw)
         else:
             raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
+
+    @property
+    def lmin(self):
+        if self._lmin is None:
+            self.logger.warning('The smallest non-zero eigenvalue G.lmin is not '
+                                'available, we need to estimate it. '
+                                'Explicitly call G.estimate_lmin() or '
+                                'G.compute_fourier_basis() '
+                                'once beforehand to suppress this warning.')
+            self.estimate_lmin()
+        return self._lmin
+
+    def estimate_lmin(self):
+        if self._lmin is None:
+            self._lmin = estimate_lmin(self)
+        return self._lmin
+
+    def count_components(self):
+        if self._n_connected is None:
+            self._n_connected = count_components(self)
+            if not hasattr(self, '_connected'):
+                self._connected = (self._n_connected == 1)
+        return self._n_connected
+
+    def extract_components(self):
+        return extract_components(self)
 
 
 class BipartiteGraph(BigGraph):
