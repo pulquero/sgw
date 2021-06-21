@@ -31,6 +31,7 @@ def heatKernel(G, t):
         return np.exp(-t * x / G.lmax)
     return kernel
 
+
 def gwt(f, G, kernel):
     f_hat = G.gft(f)
     coeffs = []
@@ -40,6 +41,7 @@ def gwt(f, G, kernel):
             total += kernel(G.e[k]) * f_hat[k] * G.U[i, k]
         coeffs.append(total)
     return coeffs
+
 
 def createSignal(G, nodes=None):
     if nodes is None:
@@ -53,6 +55,7 @@ def createSignal(G, nodes=None):
             s[n][i] = 1.0
     return s
 
+
 def _tig(g, s, **kwargs):
     """
     Returns a tensor of (coeffs, nodes, filters)
@@ -65,10 +68,12 @@ def _tig(g, s, **kwargs):
     assert tig.shape == s.shape + (tig.shape[2],)
     return tig
 
+
 def nodeEmbedding(g, func, nodes=None, **kwargs):
     s = createSignal(g.G, nodes)
     tig = _tig(g, s, **kwargs)
     return func(tig)
+
 
 def multiResolutionGraphWave(G, filter_factory, R, ts, **kwargs):
     """
@@ -87,6 +92,7 @@ def multiResolutionGraphWave(G, filter_factory, R, ts, **kwargs):
         gw = graphWave(G, g, ts, **kwargs)
         multiResGW.append(gw)
     return np.concatenate(multiResGW, axis=1)
+
 
 def graphWave(G, g=None, ts=None, nodes=None, ecf_method=None, **kwargs):
     """
@@ -142,9 +148,11 @@ def graphWave(G, g=None, ts=None, nodes=None, ecf_method=None, **kwargs):
     G.gw = gw
     return gw
 
+
 def gw_flatten(gw):
     data_z = gw.reshape(gw.shape[0], gw.shape[1]*gw.shape[2])
     return np.c_[data_z.real, data_z.imag]
+
 
 def spectrogram(G, g=None, M=100, shifts=None, nodes=None, **kwargs):
     if g is None:
@@ -162,6 +170,7 @@ def spectrogram(G, g=None, M=100, shifts=None, nodes=None, **kwargs):
     G.spectr = spectr
     return spectr
 
+
 def kernelCentrality(G, g=None, nodes=None, **kwargs):
     if g is None:
         g = gsp.filters.Heat(G)
@@ -169,6 +178,7 @@ def kernelCentrality(G, g=None, nodes=None, **kwargs):
     centr = nodeEmbedding(g, norm_sqr_func, nodes, **kwargs)
     G.centr = centr
     return centr
+
 
 def plotTig(tig, nodes=None):
     if isinstance(tig, gsp.filters.Filter):
@@ -197,6 +207,7 @@ def plotTig(tig, nodes=None):
     fig.show()
     return fig
 
+
 def plotGraphWave(gw):
     if isinstance(gw, gsp.graphs.Graph):
         G = gw
@@ -216,11 +227,13 @@ def plotGraphWave(gw):
                 axs[n].plot(x, y)
     fig.show()
 
+
 def plotNodeLabels(G):
     for i, coord in enumerate(G.coords):
         plt.gca().annotate(str(i), coord)
     plt.gcf().show()
     plt.gcf().canvas.draw_idle()
+
 
 def plotGraph(G):
     G.set_coordinates()
@@ -228,10 +241,12 @@ def plotGraph(G):
     plt.axis('off')
     plotNodeLabels(G)
 
+
 def plotSignal(G, y):
     G.set_coordinates()
     G.plot_signal(y)
     plotNodeLabels(G)
+
 
 def multiResolutionSignature(G, filter_factory, R, **kwargs):
     """
@@ -250,6 +265,7 @@ def multiResolutionSignature(G, filter_factory, R, **kwargs):
         multiResSig.append(levelSig)
     return np.concatenate(multiResSig, axis=1)
 
+
 def _signature_exact(g):
     """
     Exact implementation of SGW signature.
@@ -267,6 +283,7 @@ def _signature_exact(g):
                 total += ge[t, k] * ev**2
             sig[i][t] = total
     return sig
+
 
 def _signature_gsp(g, **kwargs):
     """
@@ -290,10 +307,12 @@ SGW signature.
 """
 signature = _signature_gsp
 
+
 def codebook(sig, k):
     kmeans = cluster.KMeans(n_clusters=k)
     kmeans.fit(sig)
     return _dedup(kmeans.cluster_centers_)
+
 
 def codebook_auto(sig, mink=2, maxk = None):
     """
@@ -308,6 +327,7 @@ def codebook_auto(sig, mink=2, maxk = None):
     kmeans = _autoCluster(sig, mink, maxk)
     return _dedup(kmeans.cluster_centers_)
 
+
 def _autoCluster(data, mink, maxk):
     maxScore = 0.0
     bestKMeans = None
@@ -319,6 +339,7 @@ def _autoCluster(data, mink, maxk):
             bestKMeans = kmeans
     return bestKMeans
     
+
 def _dedup(arrs):
     if arrs.shape[0] > 1:
         _prev = arrs[0]
@@ -332,6 +353,7 @@ def _dedup(arrs):
         return np.asarray(dedupped)
     else:
         return arrs
+
 
 def code(sig, codebook, alpha):
     """
@@ -348,6 +370,7 @@ def code(sig, codebook, alpha):
     code /= np.sum(code, axis=0)
     return code
 
+
 def histogram(code, agg=np.sum):
     """
     Histogram (code @ 1)
@@ -361,30 +384,49 @@ def histogram(code, agg=np.sum):
         h[i] = agg(code[i])
     return h
 
+
 def bof(code, G, eps):
     K = np.exp(-G.W.toarray()/eps)
     return code @ K @ code.transpose()
 
+
+def connected_components(G):
+    unvisited = set(range(G.W.shape[0]))
+    count = 0
+    while unvisited:
+        stack = [next(iter(unvisited))]
+        while len(stack):
+            v = stack.pop()
+            if v in unvisited:
+                unvisited.remove(v)
+                stack.extend(G.W[v].nonzero()[1])
+        count += 1
+    return count
+
+
 def estimate_lmin(G, maxiter=2000):
+    if not hasattr(G, '_ccs'):
+        G._ccs = connected_components(G)
     N = G.N
-    approx_evecs = np.empty((N, 2))
-    # 0-eigenvector (exact)
-    approx_evecs[:,0] = 1
-    # 1st eigenvector (guess)
+    approx_evecs = np.empty((N, G._ccs+1))
+    # 0-eigenvectors (exact)
+    approx_evecs[:,:-1] = 1
+    # 1st non-zero eigenvector (guess)
     idxs = np.arange(N)
     one_idxs = np.random.choice(idxs, N//2, replace=False)
     neg_one_idxs = idxs[np.isin(idxs, one_idxs, assume_unique=True, invert=True)]
-    approx_evecs[one_idxs,1] = 1
-    approx_evecs[neg_one_idxs,1] = -1
+    approx_evecs[one_idxs,-1] = 1
+    approx_evecs[neg_one_idxs,-1] = -1
     if N&1:
-        approx_evecs[neg_one_idxs[-1],1] = 0
+        approx_evecs[neg_one_idxs[-1],-1] = 0
 
     # simple pre-conditioner
     M = sparse.spdiags(1/G.L.diagonal(), 0, N, N)
     evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, M=M, largest=False, maxiter=maxiter)
-    lmin = evals[1]
+    lmin = evals[-1]
     assert not np.isclose(lmin, 0)
     return lmin
+
 
 class LGraphFourier(gsp.graphs.fourier.GraphFourier):
     def compute_fourier_basis(self, recompute=False, spectrum_only=False):
@@ -424,6 +466,7 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
         else:
             raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
 
+
 class LGraph(LGraphFourier, gsp.graphs.Graph):
     def __init__(self, L, gtype='unknown', lap_type='combinatorial'):
         self.logger = gsp.utils.build_logger(__name__)
@@ -431,6 +474,7 @@ class LGraph(LGraphFourier, gsp.graphs.Graph):
         self.lap_type = lap_type
         self.N = L.shape[0]
         self.gtype = gtype
+
 
 class Hypergraph(LGraph):
     def __init__(self, I, gtype='unknown', lap_type='combinatorial'):
@@ -494,6 +538,7 @@ class Hypergraph(LGraph):
             self._iw = np.asarray(np.sum(np.power(self.I.toarray(), 2), axis=0)).squeeze()
         return self._iw
 
+
 class BigGraph(LGraphFourier, gsp.graphs.Graph):
     @staticmethod
     def create_from(G):
@@ -511,6 +556,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         else:
             raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
 
+
 class BipartiteGraph(BigGraph):
     def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
         super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
@@ -521,9 +567,11 @@ class BipartiteGraph(BigGraph):
         if self.lap_type == 'normalized':
             assert self.e[-1] == 2
 
+
 class StarGraph(gsp.graphs.Comet):
     def __init__(self, N):
         super().__init__(N, N-1)
+
 
 class GWHeat(gsp.filters.Filter):
     """
@@ -563,6 +611,7 @@ class GWHeat(gsp.filters.Filter):
 
         super().__init__(G, kernels)
 
+
 class GaussianFilter(gsp.filters.Filter):
     """
     Filter used by spectrogram.
@@ -572,6 +621,7 @@ class GaussianFilter(gsp.filters.Filter):
             return np.exp(-M * (x/G.lmax)**2)
 
         super().__init__(G, [kernel])
+
 
 class ShiftedFilter(gsp.filters.Filter):
     """
