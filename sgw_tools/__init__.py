@@ -603,7 +603,6 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
     def estimate_lmin(self):
         if self._lmin is None:
             self._lmin = estimate_lmin(self)
-        return self._lmin
 
     def count_components(self):
         if self._n_connected is None:
@@ -642,7 +641,7 @@ class GWHeat(gsp.filters.Filter):
         def kernel(x, s):
             return np.exp(-x * s)
 
-        if hasattr(G, '_lmin'):
+        if hasattr(G, '_lmin') and G._lmin:
             lmin = G._lmin
         else:
             if not approximate and G.N > 3000:
