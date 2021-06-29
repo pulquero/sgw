@@ -110,6 +110,8 @@ def directed_demo():
     sgw.plotGraph(G)
     pca(data, 9)
 
-simple_demo()
-undirected_demo()
-directed_demo()
+
+if __name__ == '__main__':
+    simple_demo()
+    undirected_demo()
+    directed_demo()

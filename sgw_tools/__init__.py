@@ -396,8 +396,32 @@ def bof(code, G, eps):
     return code @ K @ code.transpose()
 
 
+def magneticAdjacencyMatrix(G, q):
+    if not G.is_directed():
+        Wq = G.W
+        dwq = G.dw
+    else:
+        W_star = G.W.T.conj()
+        # hermitian
+        W_h = (G.W + W_star)/2
+        if q == 0:
+            Wq = W_h
+        else:
+            # anti-hermitian
+            W_anti = G.W - W_star
+            gamma_data = np.exp(1j*2*np.pi*q*W_anti.data)
+            Gamma = sparse.csr_matrix((gamma_data, W_anti.indices, W_anti.indptr), shape=W_anti.shape, dtype=complex)
+            # Hadamar product
+            Wq = Gamma.multiply(W_h)
+        dwq = np.ravel(W_h.sum(axis=0))
+    return Wq, dwq
+
+
 def count_components(G):
-    W = G.mW
+    """
+    Returns the number of weakly connected components.
+    """
+    W = G.Wq if hasattr(G, 'Wq') else magneticAdjacencyMatrix(G, q=0)
     unvisited = set(range(W.shape[0]))
     count = 0
     while unvisited:
@@ -412,7 +436,10 @@ def count_components(G):
 
 
 def extract_components(G):
-    W = G.mW
+    """
+    Returns a list of the weakly connected components.
+    """
+    W = G.Wq if hasattr(G, 'Wq') else magneticAdjacencyMatrix(G, q=0)
     unvisited = set(range(W.shape[0]))
     subgraphs = []
     while unvisited:
@@ -449,7 +476,7 @@ def _estimate_lmin(G, maxiter):
     M = sparse.spdiags(1/G.L.diagonal(), 0, N, N)
     evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, M=M, largest=False, maxiter=maxiter)
     lmin = evals[-1]
-    assert not np.isclose(lmin, 0), "Last eigenvalue is (close to) zero: {}".format(lmin)
+    assert not np.isclose(lmin, 0), "Second eigenvalue is (close to) zero: {}".format(lmin)
     return lmin
 
 
@@ -567,12 +594,14 @@ class Hypergraph(LGraph):
 
     @property
     def i(self):
+        """The degree (the number of incident nodes) of each edge."""
         if self._i is None:
             self._i = np.asarray(np.sum((self.I != 0).toarray(), axis=0)).squeeze()
         return self._i
 
     @property
     def iw(self):
+        """The weighted degree of each edge."""
         if self._iw is None:
             self._iw = np.asarray(np.sum(np.power(self.I.toarray(), 2), axis=0)).squeeze()
         return self._iw
@@ -586,8 +615,11 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
     def __init__(self, W, lap_type='combinatorial', q=0, coords=None, plotting={}):
         self.lap_type = None
+        self._I = None
         self.q = q
-        self._mW = None
+        self._Iq = None
+        self._Wq = None
+        self._dwq = None
         self._lmin = None
         self._n_connected = None
         super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
@@ -618,41 +650,66 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
         self.lap_type = lap_type
 
-        mW = self.mW
-        mdw = self._mdw
-
         if lap_type == 'combinatorial':
-            D = sparse.diags(mdw)
-            self.L = D - mW
+            D = sparse.diags(self.dwq)
+            self.L = D - self.Wq
         elif lap_type == 'normalized':
-            d = np.zeros(self.n_vertices)
-            disconnected = (mdw == 0)
-            np.power(mdw, -0.5, where=~disconnected, out=d)
+            d = np.zeros(self.N)
+            disconnected = (self.dwq == 0)
+            np.power(self.dwq, -0.5, where=~disconnected, out=d)
             D = sparse.diags(d)
-            self.L = sparse.identity(self.n_vertices) - D * mW * D
+            self.L = sparse.identity(self.N) - D * self.Wq * D
             self.L[disconnected, disconnected] = 0
             self.L.eliminate_zeros()
         else:
             raise ValueError('Unknown Laplacian type {}'.format(lap_type))
 
     @property
-    def mW(self):
-        if self._mW is None:
-            if not self.is_directed():
-                self._mW = self.W
-                self._mdw = self.dw
-            else:
-                W_symm = (self.W + self.W.T)/2
-                if self.q == 0:
-                    self._mW = W_symm
-                else:
-                    W_asymm = self.W - self.W.T
-                    gamma_data = np.exp(1j*2*np.pi*self.q*W_asymm.data)
-                    Gamma = sparse.csr_matrix((gamma_data, W_asymm.indices, W_asymm.indptr), shape=W_asymm.shape, dtype=complex)
-                    # Hadamar product
-                    self._mW = Gamma.multiply(W_symm)
-                self._mdw = np.ravel(W_symm.sum(axis=0))
-        return self._mW
+    def I(self):
+        if self._I is None:
+            self._I = sparse.lil_matrix((self.N, self.Ne))
+            e = 0
+            for i, row in enumerate(self.W.rows):
+                for offset, j in enumerate(row):
+                    if self.is_directed() or i > j:
+                        v = self.W.data[i][offset]
+                        v_rt = np.sqrt(v)
+                        self._I[j,e] = v_rt
+                        self._I[i,e] = -v_rt
+                        e += 1
+            self._I = self._I.tocsr()
+        return self._I
+
+    @property
+    def i(self):
+        """The degree (the number of incident nodes) of each edge."""
+        return 2
+
+    @property
+    def Iq(self):
+        if self._Iq is None:
+            self._Iq = sparse.lil_matrix((self.N, self.Ne), dtype=complex)
+            e = 0
+            for i,j,v in zip(*sparse.find(self.Wq)):
+                if i > j:
+                    v_rt = np.sqrt(v)
+                    self._Iq[i,e] = v_rt
+                    self._Iq[j,e] = -v_rt.conj()
+                    e += 1
+            self._Iq = self._Iq.tocsr()
+        return self._Iq
+
+    @property
+    def Wq(self):
+        if self._Wq is None:
+            self._Wq, self._dwq = magneticAdjacencyMatrix(self, self.q)
+        return self._Wq
+
+    @property
+    def dwq(self):
+        if self._dwq is None:
+            self._Wq, self._dwq = magneticAdjacencyMatrix(self, self.q)
+        return self._dwq
 
     @property
     def lmin(self):
@@ -694,6 +751,21 @@ class BipartiteGraph(BigGraph):
 class StarGraph(gsp.graphs.Comet):
     def __init__(self, N):
         super().__init__(N, N-1)
+
+
+class DirectedPath(BigGraph):
+    def __init__(self, N, **kwargs):
+        sources = np.arange(0, N-1)
+        targets = np.arange(1, N)
+        weights = np.ones(N-1)
+        W = sparse.csr_matrix((weights, (sources, targets)), shape=(N, N))
+        super().__init__(W, **kwargs)
+
+
+class DirectedRing(DirectedPath):
+    def __init__(self, N, **kwargs):
+        super().__init__(N, **kwargs)
+        self.W[N-1,0] = 1
 
 
 class GWHeat(gsp.filters.Filter):
