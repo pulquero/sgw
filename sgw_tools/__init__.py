@@ -397,10 +397,8 @@ def bof(code, G, eps):
 
 
 def count_components(G):
-    if G.is_directed():
-        raise NotImplementedError('Directed graphs not supported yet.')
-
-    unvisited = set(range(G.W.shape[0]))
+    W = G.mW
+    unvisited = set(range(W.shape[0]))
     count = 0
     while unvisited:
         stack = [next(iter(unvisited))]
@@ -408,16 +406,14 @@ def count_components(G):
             v = stack.pop()
             if v in unvisited:
                 unvisited.remove(v)
-                stack.extend(G.W[v].nonzero()[1])
+                stack.extend(W[v].nonzero()[1])
         count += 1
     return count
 
 
 def extract_components(G):
-    if G.is_directed():
-        raise NotImplementedError('Directed graphs not supported yet.')
-
-    unvisited = set(range(G.W.shape[0]))
+    W = G.mW
+    unvisited = set(range(W.shape[0]))
     subgraphs = []
     while unvisited:
         stack = [next(iter(unvisited))]
@@ -427,7 +423,7 @@ def extract_components(G):
             if v in unvisited:
                 unvisited.remove(v)
                 comp.append(v)
-                stack.extend(G.W[v].nonzero()[1])
+                stack.extend(W[v].nonzero()[1])
         comp = sorted(comp)
         subG = G.subgraph(comp)
         subG.info = {'orig_idx': comp}
@@ -591,6 +587,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
     def __init__(self, W, lap_type='combinatorial', q=0, coords=None, plotting={}):
         self.lap_type = None
         self.q = q
+        self._mW = None
         self._lmin = None
         self._n_connected = None
         super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
@@ -621,34 +618,41 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
         self.lap_type = lap_type
 
-        if not self.is_directed():
-            W = self.W
-            dw = self.dw
-        else:
-            W_symm = (self.W + self.W.T)/2
-            if self.q == 0:
-                W = W_symm
-            else:
-                W_asymm = self.W - self.W.T
-                gamma_data = np.exp(1j*2*np.pi*self.q*W_asymm.data)
-                Gamma = sparse.csr_matrix((gamma_data, W_asymm.indices, W_asymm.indptr), shape=W_asymm.shape, dtype=complex)
-                # Hadamar product
-                W = Gamma.multiply(W_symm)
-            dw = np.ravel(W_symm.sum(axis=0))
+        mW = self.mW
+        mdw = self._mdw
 
         if lap_type == 'combinatorial':
-            D = sparse.diags(dw)
-            self.L = D - W
+            D = sparse.diags(mdw)
+            self.L = D - mW
         elif lap_type == 'normalized':
             d = np.zeros(self.n_vertices)
-            disconnected = (dw == 0)
-            np.power(dw, -0.5, where=~disconnected, out=d)
+            disconnected = (mdw == 0)
+            np.power(mdw, -0.5, where=~disconnected, out=d)
             D = sparse.diags(d)
-            self.L = sparse.identity(self.n_vertices) - D * W * D
+            self.L = sparse.identity(self.n_vertices) - D * mW * D
             self.L[disconnected, disconnected] = 0
             self.L.eliminate_zeros()
         else:
             raise ValueError('Unknown Laplacian type {}'.format(lap_type))
+
+    @property
+    def mW(self):
+        if self._mW is None:
+            if not self.is_directed():
+                self._mW = self.W
+                self._mdw = self.dw
+            else:
+                W_symm = (self.W + self.W.T)/2
+                if self.q == 0:
+                    self._mW = W_symm
+                else:
+                    W_asymm = self.W - self.W.T
+                    gamma_data = np.exp(1j*2*np.pi*self.q*W_asymm.data)
+                    Gamma = sparse.csr_matrix((gamma_data, W_asymm.indices, W_asymm.indptr), shape=W_asymm.shape, dtype=complex)
+                    # Hadamar product
+                    self._mW = Gamma.multiply(W_symm)
+                self._mdw = np.ravel(W_symm.sum(axis=0))
+        return self._mW
 
     @property
     def lmin(self):
