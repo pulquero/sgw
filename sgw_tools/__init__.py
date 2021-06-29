@@ -60,6 +60,9 @@ def _tig(g, s, **kwargs):
     """
     Returns a tensor of (coeffs, nodes, filters)
     """
+    if g.G.is_directed() and g.G.q != 0 and ('method' not in kwargs or kwargs['method'] != 'exact'):
+        raise Exception("Only method='exact' is currently supported for magnetic Laplacians.")
+
     tig = g.filter(s[..., np.newaxis], **kwargs)
     if s.shape[1] == 1: # single node
         tig = tig[:, np.newaxis, :]
@@ -184,6 +187,8 @@ def plotTig(tig, nodes=None):
     if isinstance(tig, gsp.filters.Filter):
         g = tig
         tig = _tig(g, createSignal(g.G))
+    else:
+        g = None
 
     if nodes is None:
         nodes = range(tig.shape[0])
@@ -192,8 +197,9 @@ def plotTig(tig, nodes=None):
 
     num_nodes = len(nodes)
     num_filters = tig.shape[2]
-    fig, axs = plt.subplots(num_nodes, num_filters, sharex='col', sharey='col')
-    fig.suptitle('{} wavelet coefficients'.format(g.__class__.__name__))
+    fig, axs = plt.subplots(num_nodes, num_filters, num='Wavelet coefficients', sharex='col', sharey='col')
+    title = '{} wavelet coefficients'.format(g.__class__.__name__) if g else 'Wavelet coefficients'
+    fig.suptitle(title)
     for i, n in enumerate(nodes):
         for f in range(num_filters):
             if num_nodes > 1 and num_filters > 1:
@@ -215,7 +221,7 @@ def plotGraphWave(gw):
             graphWave(G)
         gw = G.gw
 
-    fig, axs = plt.subplots(gw.shape[0], gw.shape[1], sharex='col', sharey='col')
+    fig, axs = plt.subplots(gw.shape[0], gw.shape[1], num='ECF', sharex='col', sharey='col')
     fig.suptitle('ECF')
     for n in range(gw.shape[0]):
         for f in range(gw.shape[1]):
@@ -461,7 +467,7 @@ def estimate_lmin(G, maxiter=2000):
 
 class LGraphFourier(gsp.graphs.fourier.GraphFourier):
     def compute_fourier_basis(self, recompute=False, spectrum_only=False):
-        if hasattr(self, '_e') and hasattr(self, '_U') and not recompute:
+        if hasattr(self, '_e') and self._e and hasattr(self, '_U') and self._U and not recompute:
             return
 
         assert self.L.shape == (self.N, self.N)
@@ -477,6 +483,9 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
             self._mu = np.max(np.abs(self._U))
 
         self._e[np.isclose(self._e, 0)] = 0
+        e_min = np.min(self._e)
+        assert e_min == self._e[0], "First eigenvalue is not the smallest"
+        assert e_min >= 0, "Smallest eigenvalue is negative {}".format(e_min)
         self._lmin = self._e[np.where(self._e>0)][0]
 
         e_bound = self._get_upper_bound()
@@ -487,15 +496,7 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
         self._lmax = e_max
 
     def _get_upper_bound(self):
-        max_edge_degree = np.max(self.iw)
-        if self.lap_type == 'normalized' and hasattr(self, '_iw'):
-            return max_edge_degree
-        elif self.lap_type == 'combinatorial':
-            max_vertex_degree = np.max(self.dw)
-            e_bound = max_edge_degree*max_vertex_degree
-            return e_bound
-        else:
-            raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
+        return np.inf
 
 
 class LGraph(LGraphFourier, gsp.graphs.Graph):
@@ -526,6 +527,17 @@ class Hypergraph(LGraph):
                          'edge_color': (0.5, 0.5, 0.5, 1),
                          'edge_width': 1,
                          'edge_style': '-'}
+
+    def _get_upper_bound(self):
+        max_edge_degree = np.max(self.iw)
+        if self.lap_type == 'normalized':
+            return max_edge_degree
+        elif self.lap_type == 'combinatorial':
+            max_vertex_degree = np.max(self.dw)
+            e_bound = max_edge_degree*max_vertex_degree
+            return e_bound
+        else:
+            raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
 
     def is_directed(self, recompute=False):
         return False
@@ -576,10 +588,12 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         coords = G.coords if hasattr(G, 'coords') else None
         return BigGraph(G.W, lap_type=G.lap_type, coords=coords, plotting=G.plotting)
 
-    def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
-        super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
+    def __init__(self, W, lap_type='combinatorial', q=0, coords=None, plotting={}):
+        self.lap_type = None
+        self.q = q
         self._lmin = None
         self._n_connected = None
+        super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
 
     def _get_upper_bound(self):
         if self.lap_type == 'normalized':
@@ -588,6 +602,53 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             return 2*np.max(self.dw)
         else:
             raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
+
+    def compute_laplacian(self, lap_type='combinatorial'):
+        if lap_type != self.lap_type:
+            # Those attributes are invalidated when the Laplacian is changed.
+            # Alternative: don't allow the user to change the Laplacian.
+            self._lmin = None
+            if hasattr(self, '_lmax'):
+                del self._lmax
+            if hasattr(self, '_U'):
+                del self._U
+            if hasattr(self, '_e'):
+                del self._e
+            if hasattr(self, '_coherence'):
+                del self._coherence
+            if hasattr(self, '_D'):
+                del self._D
+
+        self.lap_type = lap_type
+
+        if not self.is_directed():
+            W = self.W
+            dw = self.dw
+        else:
+            W_symm = (self.W + self.W.T)/2
+            if self.q == 0:
+                W = W_symm
+            else:
+                W_asymm = self.W - self.W.T
+                gamma_data = np.exp(1j*2*np.pi*self.q*W_asymm.data)
+                Gamma = sparse.csr_matrix((gamma_data, W_asymm.indices, W_asymm.indptr), shape=W_asymm.shape, dtype=complex)
+                # Hadamar product
+                W = Gamma.multiply(W_symm)
+            dw = np.ravel(W_symm.sum(axis=0))
+
+        if lap_type == 'combinatorial':
+            D = sparse.diags(dw)
+            self.L = D - W
+        elif lap_type == 'normalized':
+            d = np.zeros(self.n_vertices)
+            disconnected = (dw == 0)
+            np.power(dw, -0.5, where=~disconnected, out=d)
+            D = sparse.diags(d)
+            self.L = sparse.identity(self.n_vertices) - D * W * D
+            self.L[disconnected, disconnected] = 0
+            self.L.eliminate_zeros()
+        else:
+            raise ValueError('Unknown Laplacian type {}'.format(lap_type))
 
     @property
     def lmin(self):
@@ -616,8 +677,8 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
 
 class BipartiteGraph(BigGraph):
-    def __init__(self, W, lap_type='combinatorial', coords=None, plotting={}):
-        super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
+    def __init__(self, W, lap_type='combinatorial', q=0, coords=None, plotting={}):
+        super().__init__(W, lap_type=lap_type, q=q, coords=coords, plotting=plotting)
         self._lmax = 2
 
     def compute_fourier_basis(self, recompute=False):
@@ -656,11 +717,11 @@ class GWHeat(gsp.filters.Filter):
         e_mean = np.sqrt(lmin * G.lmax)
         s_min = -np.log(gamma) / e_mean
         s_max = -np.log(eta) / e_mean
-        assert s_min < s_max
+        assert s_min < s_max, 's_min ({}) is not less than s_max ({})'.format(s_min, s_max)
         # log scale
-        scales = np.exp(np.linspace(np.log(s_min), np.log(s_max), Nf))
+        self.scales = np.exp(np.linspace(np.log(s_min), np.log(s_max), Nf))
         kernels = []
-        for s in scales:
+        for s in self.scales:
             if normalize:
                 norm = np.linalg.norm(kernel(G.e, s))
                 kernels.append(lambda x, s=s, norm=norm: kernel(x, s)/norm)
