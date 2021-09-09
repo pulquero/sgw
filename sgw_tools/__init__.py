@@ -622,7 +622,64 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         self._dwq = None
         self._lmin = None
         self._n_connected = None
-        super().__init__(W, lap_type=lap_type, coords=coords, plotting=plotting)
+        self._graph_init(W, lap_type=lap_type, coords=coords, plotting=plotting)
+
+    def _graph_init(self, adjacency, lap_type='combinatorial', coords=None, plotting={}):
+
+        self.logger = gsp.utils.build_logger(__name__)
+
+        if not sparse.isspmatrix(adjacency):
+            adjacency = np.asanyarray(adjacency)
+
+        if (adjacency.ndim != 2) or (adjacency.shape[0] != adjacency.shape[1]):
+            raise ValueError('Adjacency: must be a square matrix.')
+
+        # CSR sparse matrices are the most efficient for matrix multiplication.
+        # They are the sole sparse matrix type to support eliminate_zeros().
+        self.W = sparse.csr_matrix(adjacency, copy=False)
+
+        if np.isnan(self.W.sum()):
+            raise ValueError('Adjacency: there is a Not a Number (NaN).')
+        if np.isinf(self.W.sum()):
+            raise ValueError('Adjacency: there is an infinite value.')
+        if self.has_loops():
+            self.logger.warning('Adjacency: there are self-loops '
+                                '(non-zeros on the diagonal). '
+                                'The Laplacian will not see them.')
+        if (self.W < 0).nnz != 0:
+            self.logger.warning('Adjacency: there are negative edge weights.')
+
+        self.gtype = 'unknown'
+
+        self.N = self.W.shape[0]
+
+        # Don't keep edges of 0 weight. Otherwise Ne will not correspond
+        # to the real number of edges. Problematic when plotting.
+        self.W.eliminate_zeros()
+
+        # Don't count edges two times if undirected.
+        # Be consistent with the size of the differential operator.
+        if self.is_directed():
+            self.Ne = self.W.nnz
+        else:
+            diagonal = np.count_nonzero(self.W.diagonal())
+            off_diagonal = self.W.nnz - diagonal
+            self.Ne = off_diagonal // 2 + diagonal
+
+        self.compute_laplacian(lap_type)
+
+        if coords is not None:
+            # TODO: self.coords should be None if unset.
+            self.coords = np.asanyarray(coords)
+
+        self.plotting = {
+                'vertex_size': 100,
+                'vertex_color': (0.12, 0.47, 0.71, 1),
+                'edge_color': (0.5, 0.5, 0.5, 1),
+                'edge_width': 1,
+                'edge_style': '-'
+        }
+        self.plotting.update(plotting)
 
     def _get_upper_bound(self):
         if self.lap_type == 'normalized':
@@ -631,6 +688,9 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             return 2*np.max(self.dw)
         else:
             raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
+
+    def has_loops(self):
+        return np.any(self.W.diagonal() != 0)
 
     def compute_laplacian(self, lap_type='combinatorial'):
         if lap_type != self.lap_type:
@@ -663,6 +723,27 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             self.L.eliminate_zeros()
         else:
             raise ValueError('Unknown Laplacian type {}'.format(lap_type))
+
+    def get_edge_list(self):
+        if self.is_directed():
+            W = self.W.tocoo()
+        else:
+            W = sparse.triu(self.W, format='coo')
+
+        sources = W.row
+        targets = W.col
+        weights = W.data
+
+        assert self.Ne == sources.size == targets.size == weights.size
+        return sources, targets, weights
+
+    def subgraph(self, vertices):
+        adjacency = self.W[vertices, :][:, vertices]
+        try:
+            coords = self.coords[vertices]
+        except AttributeError:
+            coords = None
+        return BigGraph(adjacency, self.lap_type, self.q, coords, self.plotting)
 
     @property
     def I(self):
