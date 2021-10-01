@@ -915,3 +915,18 @@ class ShiftedFilter(gsp.filters.Filter):
         kernels = [lambda x, kernel=kernel, s=s: kernel(x - s) for s in shifts for kernel in g._kernels]
 
         super().__init__(G, kernels)
+
+
+class CustomFilter(gsp.filters.Filter):
+    def __init__(self, G, func, scales=1):
+        def kernel(x, s):
+            return func(x*s)
+
+        if not hasattr(scales, '__iter__'):
+            scales = [scales]
+        self.scales = scales
+
+        kernels = []
+        for s in scales:
+            kernels.append(lambda x, s=s: kernel(x,s))
+        super().__init__(G, kernels)
