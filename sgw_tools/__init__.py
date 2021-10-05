@@ -63,12 +63,15 @@ def _tig(g, s, **kwargs):
     if g.G.is_directed() and g.G.q != 0 and ('method' not in kwargs or kwargs['method'] != 'exact'):
         raise Exception("Only method='exact' is currently supported for magnetic Laplacians.")
 
+    if s.ndim == 1:
+        s = s[..., np.newaxis]
+    assert s.ndim == 2, "Signal shape was {}".format(s.shape)
     tig = g.filter(s[..., np.newaxis], **kwargs)
-    if s.shape[1] == 1: # single node
-        tig = tig[:, np.newaxis, :]
+    if s.shape[1] == 1: # single signal
+        tig = tig[..., np.newaxis]
     if tig.ndim == 2: # single filter
         tig = tig[..., np.newaxis]
-    assert tig.shape == s.shape + (tig.shape[2],)
+    assert tig.shape == s.shape + (tig.shape[2],), "Tig shape was {}".format(tig.shape)
     return tig
 
 
