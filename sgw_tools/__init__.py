@@ -833,8 +833,8 @@ class BipartiteGraph(BigGraph):
 
 
 class StarGraph(gsp.graphs.Comet):
-    def __init__(self, N):
-        super().__init__(N, N-1)
+    def __init__(self, N, **kwargs):
+        super().__init__(N, N-1, **kwargs)
 
 
 class DirectedPath(BigGraph):
