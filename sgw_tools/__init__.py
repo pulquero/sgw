@@ -493,7 +493,7 @@ def estimate_lmin(G, maxiter=2000):
 
 class LGraphFourier(gsp.graphs.fourier.GraphFourier):
     def compute_fourier_basis(self, recompute=False, spectrum_only=False):
-        if hasattr(self, '_e') and self._e and hasattr(self, '_U') and self._U and not recompute:
+        if hasattr(self, '_e') and self._e is not None and hasattr(self, '_U') and self._U is not None and not recompute:
             return
 
         assert self.L.shape == (self.N, self.N)
