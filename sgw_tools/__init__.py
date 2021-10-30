@@ -177,11 +177,11 @@ def spectrogram(G, g=None, M=100, shifts=None, nodes=None, **kwargs):
     return spectr
 
 
-def kernelCentrality(G, g=None, nodes=None, **kwargs):
+def kernelCentrality(G, g=None, nodes=None, ord=None, **kwargs):
     if g is None:
         g = gsp.filters.Heat(G)
-    norm_sqr_func = lambda tig: (np.linalg.norm(tig, axis=0, ord=2)**2)
-    centr = nodeEmbedding(g, norm_sqr_func, nodes, **kwargs)
+    norm_func = lambda tig: np.linalg.norm(tig, axis=0, ord=ord)
+    centr = nodeEmbedding(g, norm_func, nodes, **kwargs)
     G.centr = centr
     return centr
 

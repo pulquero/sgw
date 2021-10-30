@@ -13,8 +13,8 @@ g = gsp.filters.Heat(G)
 data = sgw.kernelCentrality(G, g)
 
 nodes = np.arange(G.N)
-ranking = sorted(nodes, key=lambda v: 1/data[v][0], reverse=True)
+ranking = sorted(nodes, key=lambda v: data[v][0])
 
 sgw.plotGraph(G)
-print(["{} ({:.3f})".format(r,data[r][0]) for r in ranking])
+print(["{} ({:.3f})".format(r, data[r][0]) for r in ranking])
 plt.show()
