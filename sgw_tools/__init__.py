@@ -491,6 +491,23 @@ def estimate_lmin(G, maxiter=2000):
     return sorted(lmins)[0]
 
 
+def estimate_lmax(G):
+    try:
+        lmax = sparse.linalg.eigsh(G.L, k=1, tol=5e-3,
+                                   ncv=min(G.N, 10),
+                                   return_eigenvectors=False)
+        lmax = lmax[0]
+        lmax *= 1.01  # Increase by 1 percent to be robust to errors.
+        upper_bound = G._get_upper_bound()
+        if lmax > upper_bound:
+            lmax = upper_bound
+    except sparse.linalg.ArpackNoConvergence:
+        G.logger.warning('Lanczos method did not converge. '
+                            'Using an alternative method.')
+        lmax = G._get_upper_bound()
+    return lmax
+
+
 class LGraphFourier(gsp.graphs.fourier.GraphFourier):
     def compute_fourier_basis(self, recompute=False, spectrum_only=False):
         if hasattr(self, '_e') and self._e is not None and hasattr(self, '_U') and self._U is not None and not recompute:
@@ -624,6 +641,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         self._Wq = None
         self._dwq = None
         self._lmin = None
+        self._lmax = None
         self._n_connected = None
         self._graph_init(W, lap_type=lap_type, coords=coords, plotting=plotting)
 
@@ -700,8 +718,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             # Those attributes are invalidated when the Laplacian is changed.
             # Alternative: don't allow the user to change the Laplacian.
             self._lmin = None
-            if hasattr(self, '_lmax'):
-                del self._lmax
+            self._lmax = None
             if hasattr(self, '_U'):
                 del self._U
             if hasattr(self, '_e'):
@@ -809,6 +826,21 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
     def estimate_lmin(self):
         if self._lmin is None:
             self._lmin = estimate_lmin(self)
+
+    @property
+    def lmax(self):
+        if self._lmax is None:
+            self.logger.warning('The largest eigenvalue G.lmax is not '
+                                'available, we need to estimate it. '
+                                'Explicitly call G.estimate_lmax() or '
+                                'G.compute_fourier_basis() '
+                                'once beforehand to suppress the warning.')
+            self.estimate_lmax()
+        return self._lmax
+
+    def estimate_lmax(self):
+        if self._lmax is None:
+            self._lmax = estimate_lmax(self)
 
     def count_components(self):
         if self._n_connected is None:
