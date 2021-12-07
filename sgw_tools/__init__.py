@@ -629,13 +629,18 @@ class Hypergraph(LGraph):
 
 class BigGraph(LGraphFourier, gsp.graphs.Graph):
     @staticmethod
-    def create_from(G):
+    def create_from(G, s=1, q=0):
         coords = G.coords if hasattr(G, 'coords') else None
-        return BigGraph(G.W, lap_type=G.lap_type, coords=coords, plotting=G.plotting)
+        return BigGraph(G.W, lap_type=G.lap_type, s=s, q=q, coords=coords, plotting=G.plotting)
 
-    def __init__(self, W, lap_type='combinatorial', q=0, coords=None, plotting={}):
+    def __init__(self, W, lap_type='combinatorial', s=1, q=0, coords=None, plotting={}):
+        """
+        s = deformation parameter (1 - sA + s^2(D - 1))
+        q = magnetic parameter [0, 1]
+        """
         self.lap_type = None
         self._I = None
+        self.s = s
         self.q = q
         self._Iq = None
         self._Wq = None
@@ -732,13 +737,26 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
         if lap_type == 'combinatorial':
             D = sparse.diags(self.dwq)
-            self.L = D - self.Wq
+            if self.s == 1:
+                self.L = D - self.Wq
+            elif self.s == -1:
+                self.L = D + self.Wq
+            else:
+                I = sparse.identity(self.N)
+                self.L = I - self.s * self.Wq + self.s * self.s * (D - I)
         elif lap_type == 'normalized':
-            d = np.zeros(self.N)
+            d_neg_sqrt = np.zeros(self.N)
             disconnected = (self.dwq == 0)
-            np.power(self.dwq, -0.5, where=~disconnected, out=d)
-            D = sparse.diags(d)
-            self.L = sparse.identity(self.N) - D * self.Wq * D
+            np.power(self.dwq, -0.5, where=~disconnected, out=d_neg_sqrt)
+            D_neg_sqrt = sparse.diags(d_neg_sqrt)
+            if self.s == 1:
+                self.L = sparse.identity(self.N) - D_neg_sqrt * self.Wq * D_neg_sqrt
+            elif self.s == -1:
+                self.L = sparse.identity(self.N) + D_neg_sqrt * self.Wq * D_neg_sqrt
+            else:
+                I = sparse.identity(self.N)
+                D = sparse.diags(self.dwq)
+                self.L = D_neg_sqrt @ (I - self.s * self.Wq + self.s * self.s * (D - I)) @ D_neg_sqrt
             self.L[disconnected, disconnected] = 0
             self.L.eliminate_zeros()
         else:
@@ -854,9 +872,10 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
 
 class BipartiteGraph(BigGraph):
-    def __init__(self, W, lap_type='combinatorial', q=0, coords=None, plotting={}):
-        super().__init__(W, lap_type=lap_type, q=q, coords=coords, plotting=plotting)
-        self._lmax = 2
+    def __init__(self, W, lap_type='combinatorial', s=1, q=0, coords=None, plotting={}):
+        super().__init__(W, lap_type=lap_type, s=s, q=q, coords=coords, plotting=plotting)
+        if self.lap_type == 'normalized':
+            self._lmax = 2
 
     def compute_fourier_basis(self, recompute=False):
         LGraphFourier.compute_fourier_basis(self, recompute)
