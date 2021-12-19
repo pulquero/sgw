@@ -508,6 +508,20 @@ def estimate_lmax(G):
     return lmax
 
 
+def power_diagonal(a, exp):
+    a_exp = np.zeros(a.shape[0])
+    disconnected = np.isclose(a, 0)
+    np.power(a, exp, where=~disconnected, out=a_exp)
+    return sparse.diags(a_exp), disconnected
+
+
+def perron_vector(P):
+    _evals, evecs = sparse.linalg.eigs(P.T, k=1, v0=np.ones(P.shape[0]))
+    p = evecs[:,0]
+    assert np.allclose(p.imag, 0)
+    return p.real/p.real.sum()
+
+
 class LGraphFourier(gsp.graphs.fourier.GraphFourier):
     def compute_fourier_basis(self, recompute=False, spectrum_only=False):
         if hasattr(self, '_e') and self._e is not None and hasattr(self, '_U') and self._U is not None and not recompute:
@@ -580,7 +594,7 @@ class Hypergraph(LGraph):
             e_bound = max_edge_degree*max_vertex_degree
             return e_bound
         else:
-            raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
+            return np.inf
 
     def is_directed(self, recompute=False):
         return False
@@ -713,7 +727,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         elif self.lap_type == 'combinatorial':
             return 2*np.max(self.dw)
         else:
-            raise Exception('Unsupported Laplacian type: {}'.format(self.lap_type))
+            return np.inf
 
     def has_loops(self):
         return np.any(self.W.diagonal() != 0)
@@ -745,10 +759,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
                 I = sparse.identity(self.N)
                 self.L = I - self.s * self.Wq + self.s * self.s * (D - I)
         elif lap_type == 'normalized':
-            d_neg_sqrt = np.zeros(self.N)
-            disconnected = (self.dwq == 0)
-            np.power(self.dwq, -0.5, where=~disconnected, out=d_neg_sqrt)
-            D_neg_sqrt = sparse.diags(d_neg_sqrt)
+            D_neg_sqrt, disconnected = power_diagonal(self.dwq, -0.5)
             if self.s == 1:
                 self.L = sparse.identity(self.N) - D_neg_sqrt * self.Wq * D_neg_sqrt
             elif self.s == -1:
@@ -757,6 +768,27 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
                 I = sparse.identity(self.N)
                 D = sparse.diags(self.dwq)
                 self.L = D_neg_sqrt @ (I - self.s * self.Wq + self.s * self.s * (D - I)) @ D_neg_sqrt
+            self.L[disconnected, disconnected] = 0
+            self.L.eliminate_zeros()
+        elif lap_type == 'combinatorial directed':
+            if self.is_directed():
+                self.phi = perron_vector(self.W)
+            else:
+                self.phi = self.dw/self.dw.sum()
+            self.P = sparse.csr_matrix(self.W/self.W.sum(axis=1), copy=False)
+            Phi = sparse.diags(self.phi)
+            Phi_P = Phi @ self.P
+            self.L = Phi - (Phi_P + Phi_P.T.conj())/2
+        elif lap_type == 'normalized directed':
+            if self.is_directed():
+                self.phi = perron_vector(self.W)
+            else:
+                self.phi = self.dw/self.dw.sum()
+            self.P = sparse.csr_matrix(self.W/self.W.sum(axis=1), copy=False)
+            Phi_sqrt, disconnected = power_diagonal(self.phi, 0.5)
+            Phi_neg_sqrt, _ = power_diagonal(self.phi, -0.5)
+            Phi_P_Phi = Phi_sqrt @ self.P @ Phi_neg_sqrt
+            self.L = sparse.identity(self.N) - (Phi_P_Phi + Phi_P_Phi.T.conj())/2
             self.L[disconnected, disconnected] = 0
             self.L.eliminate_zeros()
         else:
