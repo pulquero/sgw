@@ -479,14 +479,23 @@ def _estimate_lmin(G, maxiter):
     M = sparse.spdiags(1/G.L.diagonal(), 0, N, N)
     evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, M=M, largest=False, maxiter=maxiter)
     lmin = evals[-1]
-    assert not np.isclose(lmin, 0), "Second eigenvalue is (close to) zero: {}".format(lmin)
+    if np.isclose(lmin, 0):
+        raise ValueError("Second eigenvalue is (close to) zero: {}".format(lmin))
     return lmin
 
 
-def estimate_lmin(G, maxiter=2000):
+def estimate_lmin(G, maxiter=2000, restarts=5):
     lmins = []
     for subG in G.extract_components():
-        lmin = _estimate_lmin(subG, maxiter)
+        error = None
+        for _ in range(restarts):
+            try:
+                lmin = _estimate_lmin(subG, maxiter)
+                break
+            except ValueError as e:
+                error = e
+        if error is not None:
+            raise error
         lmins.append(lmin)
     return sorted(lmins)[0]
 
