@@ -463,39 +463,37 @@ def extract_components(G):
 
 def _estimate_lmin(G, maxiter):
     N = G.N
-    approx_evecs = np.empty((N, 2))
-    # 0-eigenvector (exact)
-    approx_evecs[:,:-1] = 1
-    # 1st non-zero eigenvector (guess)
-    idxs = np.arange(N)
-    one_idxs = np.random.choice(idxs, N//2, replace=False)
-    neg_one_idxs = idxs[np.isin(idxs, one_idxs, assume_unique=True, invert=True)]
-    approx_evecs[one_idxs,-1] = 1
-    approx_evecs[neg_one_idxs,-1] = -1
-    if N&1:
-        approx_evecs[neg_one_idxs[-1],-1] = 0
+    if N > 100:
+        approx_evecs = np.empty((N, 2))
+        # 0-eigenvector (exact)
+        approx_evecs[:,:-1] = 1
+        # 1st non-zero eigenvector (guess)
+        idxs = np.arange(N)
+        one_idxs = np.random.choice(idxs, N//2, replace=False)
+        neg_one_idxs = idxs[np.isin(idxs, one_idxs, assume_unique=True, invert=True)]
+        approx_evecs[one_idxs,-1] = 1
+        approx_evecs[neg_one_idxs,-1] = -1
+        if N&1:
+            approx_evecs[neg_one_idxs[-1],-1] = 0
+    
+        # simple pre-conditioner
+        M = sparse.spdiags(1/G.L.diagonal(), 0, N, N)
+        evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, M=M, largest=False, maxiter=maxiter)
+        lmin = evals[-1]
+    else:
+        # if small then do exact calculation
+        G.compute_fourier_basis(spectrum_only=True)
+        lmin = G.lmin
 
-    # simple pre-conditioner
-    M = sparse.spdiags(1/G.L.diagonal(), 0, N, N)
-    evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, M=M, largest=False, maxiter=maxiter)
-    lmin = evals[-1]
     if np.isclose(lmin, 0):
         raise ValueError("Second eigenvalue is (close to) zero: {}".format(lmin))
     return lmin
 
 
-def estimate_lmin(G, maxiter=2000, restarts=5):
+def estimate_lmin(G, maxiter=2000):
     lmins = []
     for subG in G.extract_components():
-        error = None
-        for _ in range(restarts):
-            try:
-                lmin = _estimate_lmin(subG, maxiter)
-                break
-            except ValueError as e:
-                error = e
-        if error is not None:
-            raise error
+        lmin = _estimate_lmin(subG, maxiter)
         lmins.append(lmin)
     return sorted(lmins)[0]
 
@@ -822,7 +820,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             coords = self.coords[vertices]
         except AttributeError:
             coords = None
-        return BigGraph(adjacency, self.lap_type, self.q, coords, self.plotting)
+        return BigGraph(adjacency, lap_type=self.lap_type, s=self.s, q=self.q, coords=coords, plotting=self.plotting)
 
     @property
     def I(self):
