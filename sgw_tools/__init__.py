@@ -485,6 +485,7 @@ def _estimate_lmin(G, maxiter):
         G.compute_fourier_basis(spectrum_only=True)
         lmin = G.lmin
 
+    assert lmin >= 0, "Smallest eigenvalue is negative {}".format(lmin)
     if np.isclose(lmin, 0):
         raise ValueError("Second eigenvalue is (close to) zero: {}".format(lmin))
     return lmin
