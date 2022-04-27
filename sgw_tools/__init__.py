@@ -245,14 +245,16 @@ def plotNodeLabels(G):
 
 
 def plotGraph(G):
-    G.set_coordinates()
+    if not hasattr(G, 'coords') or G.coords is None:
+        G.set_coordinates()
     G.plot()
     plt.axis('off')
     plotNodeLabels(G)
 
 
 def plotSignal(G, y):
-    G.set_coordinates()
+    if not hasattr(G, 'coords') or G.coords is None:
+        G.set_coordinates()
     G.plot_signal(y)
     plotNodeLabels(G)
 
