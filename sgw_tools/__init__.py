@@ -705,7 +705,8 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
         # Don't keep edges of 0 weight. Otherwise Ne will not correspond
         # to the real number of edges. Problematic when plotting.
-        self.W.eliminate_zeros()
+        if self.W.nnz > self.W.count_nonzero():  # avoid unnecessary mutations in case underlying matrix is read-only
+            self.W.eliminate_zeros()
 
         # Don't count edges two times if undirected.
         # Be consistent with the size of the differential operator.
