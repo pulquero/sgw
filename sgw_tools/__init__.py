@@ -426,7 +426,7 @@ def count_components(G):
     """
     Returns the number of weakly connected components.
     """
-    W = G.Wq if hasattr(G, 'Wq') else magneticAdjacencyMatrix(G, q=0)
+    W = G.Wq if hasattr(G, 'Wq') else magneticAdjacencyMatrix(G, q=0)[0]
     unvisited = set(range(W.shape[0]))
     count = 0
     while unvisited:
@@ -444,7 +444,7 @@ def extract_components(G):
     """
     Returns a list of the weakly connected components.
     """
-    W = G.Wq if hasattr(G, 'Wq') else magneticAdjacencyMatrix(G, q=0)
+    W = G.Wq if hasattr(G, 'Wq') else magneticAdjacencyMatrix(G, q=0)[0]
     unvisited = set(range(W.shape[0]))
     subgraphs = []
     while unvisited:
@@ -679,6 +679,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         self.logger = gsp.utils.build_logger(__name__)
 
         if not sparse.isspmatrix(adjacency):
+            # if adjacency is of a specialist/read-only type (e.g. when using ray)
             adjacency = np.asanyarray(adjacency)
 
         if (adjacency.ndim != 2) or (adjacency.shape[0] != adjacency.shape[1]):
@@ -733,7 +734,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         self.plotting.update(plotting)
 
     def _get_upper_bound(self):
-        if self.lap_type == 'normalized':
+        if self.lap_type == 'normalized' or self.lap_type == 'adjacency':
             return 2
         elif self.lap_type == 'combinatorial':
             return 2*np.max(self.dw)
@@ -766,6 +767,8 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
                 self.L = D - self.Wq
             elif self.s == -1:
                 self.L = D + self.Wq
+            elif self.s == 0:
+                self.L = sparse.identity(self.N)
             else:
                 I = sparse.identity(self.N)
                 self.L = I - self.s * self.Wq + self.s * self.s * (D - I)
@@ -802,6 +805,8 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             self.L = sparse.identity(self.N) - (Phi_P_Phi + Phi_P_Phi.T.conj())/2
             self.L[disconnected, disconnected] = 0
             self.L.eliminate_zeros()
+        elif lap_type == 'adjacency':
+            self.L = sparse.identity(self.N) - self.Wq/np.linalg.norm(self.Wq, 2)
         else:
             raise ValueError('Unknown Laplacian type {}'.format(lap_type))
 

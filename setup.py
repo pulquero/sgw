@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="sgw_tools",
-    version="1.8.5",
+    version="1.9",
     author="Mark Hale",
     license="MIT",
     description="Spectral graph wavelet tools",
