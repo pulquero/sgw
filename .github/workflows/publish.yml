@@ -8,19 +8,31 @@ jobs:
     runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@master
-    - name: Set up Python 3.7
+    - name: Set up Python 3.8
       uses: actions/setup-python@v1
       with:
-        python-version: 3.7
+        python-version: 3.8
+    - name: Install dependencies
+      run: >-
+        python3 -m
+        pip
+        install
+        -r requirements.txt
+    - name: Tests
+      run: >-
+        python3 -m
+        unittest
+        discover
+        tests
     - name: Install pypa/build
       run: >-
-        python -m
+        python3 -m
         pip install
         build
         --user
     - name: Build a binary wheel and a source tarball
       run: >-
-        python -m
+        python3 -m
         build
         --sdist
         --wheel
