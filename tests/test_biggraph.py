@@ -165,12 +165,17 @@ class TestCase(unittest.TestCase):
             np.testing.assert_equal(G.L.toarray(), G.L.T.toarray())
             np.testing.assert_equal(G.L.diagonal(), 1)
     
+        def test_adjacency(G):
+            np.testing.assert_equal(G.L.diagonal(), 1)
+    
         G = BigGraph.create_from(graphs.ErdosRenyi(100, directed=False))
         self.assertFalse(G.is_directed())
         G.compute_laplacian(lap_type='combinatorial')
         test_combinatorial(G)
         G.compute_laplacian(lap_type='normalized')
         test_normalized(G)
+        G.compute_laplacian(lap_type='adjacency')
+        test_adjacency(G)
     
         G = BigGraph.create_from(graphs.ErdosRenyi(100, directed=True))
         self.assertTrue(G.is_directed())
@@ -178,6 +183,8 @@ class TestCase(unittest.TestCase):
         test_combinatorial(G)
         G.compute_laplacian(lap_type='normalized')
         test_normalized(G)
+        G.compute_laplacian(lap_type='adjacency')
+        test_adjacency(G)
 
     def test_estimate_lmax(self):
         graph = BigGraph.create_from(graphs.Sensor())
