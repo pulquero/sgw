@@ -66,7 +66,7 @@ class RandomRegular(BigGraph):
                 if edgesTested == N*k:
                     repetition = repetition + 1
                     edgesTested = 0
-                    U = np.kron(np.ones(k), np.arange(N))
+                    U = np.kron(np.ones(k, dtype=np.int32), np.arange(N, dtype=np.int32))
                     A = sparse.lil_matrix(np.zeros((N, N)))
             else:
                 # add edge to graph
