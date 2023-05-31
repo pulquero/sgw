@@ -137,3 +137,8 @@ def perron_vector(P):
     p = evecs[:,0]
     assert np.allclose(p.imag, 0)
     return p.real/p.real.sum()
+
+
+def operator_norm(W, maxiter=1000):
+    svals = sparse.linalg.svds(W.asfptype(), k=1, return_singular_vectors=False, solver="lobpcg", maxiter=maxiter)
+    return svals[0]

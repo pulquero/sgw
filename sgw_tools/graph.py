@@ -312,7 +312,8 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             self.L[disconnected, disconnected] = 0
             self.L.eliminate_zeros()
         elif lap_type == 'adjacency':
-            self.L = sparse.identity(self.N) - self.Wq/sparse.linalg.norm(self.Wq.asfptype(), 2)
+            self.Wq_norm = util.operator_norm(self.Wq)
+            self.L = sparse.identity(self.N) - self.Wq/self.Wq_norm
         else:
             raise ValueError('Unknown Laplacian type {}'.format(lap_type))
 
