@@ -20,6 +20,7 @@ from .graph import LGraph
 from .graph import Hypergraph
 from .graph import BigGraph
 from .graph import BipartiteGraph
+from .graphs import RingGraph
 from .graphs import StarGraph
 from .graphs import DirectedPath
 from .graphs import DirectedRing

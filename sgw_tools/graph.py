@@ -6,8 +6,12 @@ from . import util
 
 
 class LGraphFourier(gsp.graphs.fourier.GraphFourier):
-    def compute_fourier_basis(self, recompute=False, spectrum_only=False):
+    def _has_fourier_basis(self, recompute):
         if hasattr(self, '_e') and self._e is not None and hasattr(self, '_U') and self._U is not None and not recompute:
+            return True
+
+    def compute_fourier_basis(self, recompute=False, spectrum_only=False):
+        if self._has_fourier_basis(recompute):
             return
 
         assert self.L.shape == (self.N, self.N)
@@ -240,8 +244,9 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
                 W = self.W
             else:
                 W = gsp.utils.symmetrize(self.W, method='average')
-            m = W.dot(self.dw) / self.dw  # Mean degree of adjacent vertices.
-            bounds += [np.max(self.dw + m)]
+            if not np.allclose(self.dw, 0):
+                m = W.dot(self.dw) / self.dw  # Mean degree of adjacent vertices.
+                bounds += [np.max(self.dw + m)]
             # Good review: On upper bounds for Laplacian graph eigenvalues.
             return min(bounds)
         else:
@@ -494,8 +499,8 @@ class BipartiteGraph(BigGraph):
         if self.lap_type == 'normalized':
             self._lmax = 2
 
-    def compute_fourier_basis(self, recompute=False):
-        LGraphFourier.compute_fourier_basis(self, recompute)
+    def compute_fourier_basis(self, recompute=False, spectrum_only=False):
+        LGraphFourier.compute_fourier_basis(self, recompute=recompute, spectrum_only=spectrum_only)
         if self.lap_type == 'normalized':
             assert self.e[-1] == 2
 

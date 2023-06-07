@@ -3,11 +3,58 @@ import pygsp as gsp
 from scipy import sparse
 from .graph import BigGraph
 
-class StarGraph(gsp.graphs.Comet):
+
+class RingGraph(BigGraph):
     def __init__(self, N, **kwargs):
-        super().__init__(N, N-1, **kwargs)
-        self.n_vertices = self.N
-        self.n_edges = self.Ne
+        G = gsp.graphs.Ring(N)
+        super().__init__(G.W, coords=G.coords, plotting=G.plotting, **kwargs)
+
+    def compute_fourier_basis(self, recompute=False, spectrum_only=False):
+        if self._has_fourier_basis(recompute):
+            return
+
+        if self.lap_type in ["combinatorial", "normalized", "adjacency"]:
+            N = self.N
+            tmp = [0]
+            for i in np.arange(1, N // 2 + 1):
+                tmp.append(i)
+                tmp.append(i)
+            x = np.array(tmp[:N])
+            if self.lap_type == "combinatorial":
+                self._e = 2 - 2 * np.cos(2 * np.pi * x / N)
+                if not N&1:  # bipartite
+                    self._e[-1] = 4
+            else:
+                # normalized/adjacency (identical for ring graph)
+                self._e = 1 - np.cos(2 * np.pi * x / N)
+                if not N&1:  # bipartite
+                    self._e[-1] = 2
+            self._e[0] = 0
+
+            if not spectrum_only:
+                # eigenvectors are identical for normalized/adjacency and combinatorial Laplacians
+                x_k = np.kron(np.arange(N)[:, np.newaxis], np.arange(N // 2 + 1))
+                U_cos = np.cos(2 * np.pi * x_k / N) / np.sqrt(N / 2)
+                U_sin = np.sin(2 * np.pi * x_k / N) / np.sqrt(N / 2)
+                U = np.empty((N, N))
+                U[:, 0] = U_cos[:, 0] / np.sqrt(2)
+                if N&1:
+                    U[:, 1:-1:2] = U_cos[:, 1:]
+                    U[:, -1] = U_sin[:, -1]
+                else:
+                    U[:, 1:-1:2] = U_cos[:, 1:-1]
+                    U[:, -1] = U_cos[:, -1] / np.sqrt(2)
+                U[:, 2:-1:2] = U_sin[:, 1:-1]
+                U[np.isclose(U, 0)] = 0
+                self._U = U
+        else:
+            super().compute_fourier_basis(recompute=recompute, spectrum_only=spectrum_only)
+
+
+class StarGraph(BigGraph):
+    def __init__(self, N, **kwargs):
+        G = gsp.graphs.Comet(N, N-1)
+        super().__init__(G.W, coords=G.coords, plotting=G.plotting, **kwargs)
 
 
 class DirectedPath(BigGraph):

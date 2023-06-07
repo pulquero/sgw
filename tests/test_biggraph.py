@@ -7,7 +7,7 @@ import networkx as nx
 
 from pygsp import graphs
 from sgw_tools import BigGraph
-from sgw_tools import StarGraph, DirectedPath, RandomRegular
+from sgw_tools import RingGraph, StarGraph, DirectedPath, RandomRegular
 
 
 class TestCase(unittest.TestCase):
@@ -321,6 +321,7 @@ class TestCase(unittest.TestCase):
     def test_difference(self):
         for lap_type in ['combinatorial', 'normalized']:
             G = BigGraph.create_from(graphs.Logo(), lap_type=lap_type)
+            G.compute_differential_operator()
             y = G.grad(self._signal)
             self.assertEqual(len(y), G.n_edges)
             z = G.div(y)
@@ -391,6 +392,35 @@ class TestCase(unittest.TestCase):
         test(sparse.csr_matrix(W, dtype=int))
         test(sparse.csc_matrix(W))
         test(sparse.coo_matrix(W))
+
+    def test_ring_even_combinatorial(self):
+        self._test_ring(20, 'combinatorial')
+
+    def test_ring_odd_combinatorial(self):
+        self._test_ring(19, 'combinatorial')
+
+    def test_ring_even_normalized(self):
+        self._test_ring(20, 'normalized')
+
+    def test_ring_odd_normalized(self):
+        self._test_ring(19, 'normalized')
+
+    def _test_ring(self, n=20, lap_type='combinatorial'):
+        graph = RingGraph(n, lap_type=lap_type)
+        self.assertEqual(graph.n_vertices, n)
+        self.assertEqual(graph.n_edges, n)
+        np.testing.assert_array_equal(graph.d, n * [2])
+        np.testing.assert_allclose(np.linalg.norm(graph.coords[1:], axis=1), 1)
+        graph.compute_fourier_basis()
+        expected_evals = scipy.linalg.eigh(graph.L.toarray(), eigvals_only=True)
+        expected_evals[0] = 0
+        np.testing.assert_allclose(graph.e, expected_evals)
+        # check eigenvectors
+        L = graph.L
+        U = graph.U
+        for i, e in enumerate(graph.e):
+            np.testing.assert_almost_equal(U.T@U, np.eye(n), 10)
+            np.testing.assert_almost_equal(L @ U[:,i], e * U[:,i], 10)
 
     def test_star(self, n=20):
         graph = StarGraph(n)
