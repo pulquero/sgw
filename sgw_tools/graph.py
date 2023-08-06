@@ -419,6 +419,10 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
     @property
     def lmin(self):
+        """
+        Smallest non-zero eigenvalue.
+        np.nan if all the eigenvalues are zero.
+        """
         if self._lmin is None:
             self.logger.warning('The smallest non-zero eigenvalue G.lmin is not '
                                 'available, we need to estimate it. '

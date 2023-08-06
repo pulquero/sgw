@@ -186,6 +186,19 @@ class TestCase(unittest.TestCase):
         G.compute_laplacian(lap_type='adjacency')
         test_adjacency(G)
 
+    def test_estimate_lmin(self):
+        graph = BigGraph([
+            [0, 3, 0, 1],
+            [3, 0, 1, 0],
+            [0, 1, 0, 3],
+            [1, 0, 3, 0],
+        ])
+        graph.estimate_lmin()
+        np.testing.assert_approx_equal(graph.lmin, 2)
+
+        graph = BigGraph.create_from(graphs.Sensor(N=107, seed=27))
+        np.testing.assert_approx_equal(graph.lmin, 0.08818931)
+
     def test_estimate_lmax(self):
         graph = BigGraph.create_from(graphs.Sensor())
         self.assertRaises(ValueError, graph.estimate_lmax, method='unk')

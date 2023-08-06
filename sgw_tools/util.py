@@ -69,24 +69,27 @@ def _estimate_lmin(G, maxiter):
     if N > 100:
         approx_evecs = np.empty((N, 2))
         # 0-eigenvector (exact)
-        approx_evecs[:,:-1] = 1
+        approx_evecs[:,0] = 1
         # 1st non-zero eigenvector (guess)
         idxs = np.arange(N)
         one_idxs = np.random.choice(idxs, N//2, replace=False)
         neg_one_idxs = idxs[np.isin(idxs, one_idxs, assume_unique=True, invert=True)]
-        approx_evecs[one_idxs,-1] = 1
-        approx_evecs[neg_one_idxs,-1] = -1
+        approx_evecs[one_idxs,1] = 1
+        approx_evecs[neg_one_idxs,1] = -1
         if N&1:
-            approx_evecs[neg_one_idxs[-1],-1] = 0
+            approx_evecs[neg_one_idxs[-1],1] = 0
     
         # simple pre-conditioner
         M = sparse.spdiags(1/G.L.diagonal(), 0, N, N)
         evals, _ = sparse.linalg.lobpcg(G.L, approx_evecs, M=M, largest=False, maxiter=maxiter)
-        lmin = evals[-1]
-    else:
+        lmin = evals[1]
+    elif N > 1:
         # if small then do exact calculation
         G.compute_fourier_basis(spectrum_only=True)
         lmin = G.lmin
+    else:
+        # single vertex has eigenvalue zero
+        return np.nan
 
     assert lmin >= 0, "Smallest eigenvalue is negative {}".format(lmin)
     if np.isclose(lmin, 0):
@@ -97,9 +100,11 @@ def _estimate_lmin(G, maxiter):
 def estimate_lmin(G, maxiter=2000):
     lmins = []
     for subG in G.extract_components():
-        lmin = _estimate_lmin(subG, maxiter)
-        lmins.append(lmin)
-    return sorted(lmins)[0]
+        if subG.N > 1:  # skip trivial components
+            lmin = _estimate_lmin(subG, maxiter)
+            if not np.isnan(lmin):
+                lmins.append(lmin)
+    return sorted(lmins)[0] if lmins else np.nan
 
 
 def estimate_lmax(G, method='lanczos'):
