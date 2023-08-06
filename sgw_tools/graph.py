@@ -33,6 +33,8 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
         e_nz = self._e[np.where(self._e>0)]
         if len(e_nz) > 0:
             self._lmin = e_nz[0]
+        else:
+            self._lmin = np.nan
 
         e_bound = self._get_upper_bound()
         self._e[np.isclose(self._e, e_bound)] = e_bound
