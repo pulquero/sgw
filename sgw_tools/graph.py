@@ -190,7 +190,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             self.logger.warning('Adjacency: there are self-loops '
                                 '(non-zeros on the diagonal). '
                                 'The Laplacian will not see them.')
-        if (self.W < 0).nnz != 0:
+        if util.count_negatives(self.W) != 0:
             self.logger.warning('Adjacency: there are negative edge weights.')
 
         self.gtype = 'unknown'
