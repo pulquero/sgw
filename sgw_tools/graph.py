@@ -182,9 +182,10 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         # They are the sole sparse matrix type to support eliminate_zeros().
         self.W = sparse.csr_matrix(adjacency, copy=False)
 
-        if np.isnan(self.W.sum()):
+        element_sum = self.W.sum()
+        if np.isnan(element_sum):
             raise ValueError('Adjacency: there is a Not a Number (NaN).')
-        if np.isinf(self.W.sum()):
+        if np.isinf(element_sum):
             raise ValueError('Adjacency: there is an infinite value.')
         if self.has_loops():
             self.logger.warning('Adjacency: there are self-loops '

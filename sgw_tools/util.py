@@ -150,4 +150,7 @@ def operator_norm(W, maxiter=1000):
 
 
 def count_negatives(W):
-    return np.count_nonzero(W.data < 0)
+    if W.has_canonical_format:
+        return np.count_nonzero(W.data < 0)
+    else:
+        return (W < 0).nnz
