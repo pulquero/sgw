@@ -16,5 +16,5 @@ class TestCase(unittest.TestCase):
         self.assertEqual(util.count_negatives(W), 2)
 
     def test_operator_norm(self):
-        W =sparse.csr_matrix([[4.1]])
+        W = sparse.csr_matrix([[4.1]])
         self.assertEqual(util.operator_norm(W), 4.1)

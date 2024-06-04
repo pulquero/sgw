@@ -199,6 +199,10 @@ class TestCase(unittest.TestCase):
         graph = BigGraph.create_from(graphs.Sensor(N=107, seed=27))
         np.testing.assert_approx_equal(graph.lmin, 0.08818931)
 
+        # isolated node
+        graph = BigGraph([[3]])
+        np.testing.assert_approx_equal(graph.lmin, np.nan)
+
     def test_estimate_lmax(self):
         graph = BigGraph.create_from(graphs.Sensor())
         self.assertRaises(ValueError, graph.estimate_lmax, method='unk')
@@ -236,6 +240,10 @@ class TestCase(unittest.TestCase):
         ]
         graph = BigGraph(adjacency, lap_type='normalized')
         check_lmax(graph, lmax=2)
+
+        # isolated node
+        graph = BigGraph([[3]])
+        check_lmax(graph, lmax=0)
 
     def test_fourier_basis(self):
         # Smallest eigenvalue close to zero.

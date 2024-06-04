@@ -1,5 +1,6 @@
 import numpy as np
 import pygsp as gsp
+from . import util
 
 
 class GWHeat(gsp.filters.Filter):
@@ -19,9 +20,10 @@ class GWHeat(gsp.filters.Filter):
                 G.logger.warning('Large matrix ({0} x {0}) detected - using faster approximation'.format(G.N))
                 approximate = True
             if approximate:
-                lmin = estimate_lmin(G, maxiter=maxiter)
+                lmin = util.estimate_lmin(G, maxiter=maxiter)
             else:
-                lmin = G.e[np.invert(np.isclose(G.e, 0))][0]
+                nze = G.e[np.invert(np.isclose(G.e, 0))]
+                lmin = nze[0] if len(nze) > 0 else np.nan
             G._lmin = lmin
 
         e_mean = np.sqrt(lmin * G.lmax)

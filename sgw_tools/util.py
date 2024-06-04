@@ -99,7 +99,7 @@ def _estimate_lmin(G, maxiter):
 
 def estimate_lmin(G, maxiter=2000):
     if G.L.shape == (1,1):
-        return G.L[0,0]
+        return _estimate_lmin(G, maxiter)
 
     lmins = []
     for subG in G.extract_components():
