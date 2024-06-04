@@ -320,6 +320,9 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             self.L[disconnected, disconnected] = 0
             self.L.eliminate_zeros()
         elif lap_type == 'adjacency':
+            if not self.is_connected():
+                raise ValueError('Laplacian does not support direct sum decomposition - calculate for each connected component explicitly')
+
             self.Wq_norm = util.operator_norm(self.Wq)
             self.L = sparse.identity(self.N) - self.Wq/self.Wq_norm
         else:
@@ -454,14 +457,28 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
             self._lmax_method = method
 
     def count_components(self):
+        if self.is_directed():
+            raise NotImplementedError('Directed graphs not supported yet.')
+
         if self._n_connected is None:
             self._n_connected = util.count_components(self)
             if not hasattr(self, '_connected'):
                 self._connected = (self._n_connected == 1)
+
         return self._n_connected
 
     def extract_components(self):
-        return util.extract_components(self)
+        if self.is_directed():
+            raise NotImplementedError('Directed graphs not supported yet.')
+
+        subgraphs = util.extract_components(self)
+
+        if self._n_connected is None:
+            self._n_connected = len(subgraphs)
+            if not hasattr(self, '_connected'):
+                self._connected = (self._n_connected == 1)
+
+        return subgraphs
 
     def compute_differential_operator(self):
         sources, targets, weights = self.get_edge_list()
