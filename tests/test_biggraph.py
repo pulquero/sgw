@@ -200,8 +200,9 @@ class TestCase(unittest.TestCase):
         np.testing.assert_approx_equal(graph.lmin, 0.08818931)
 
         # isolated node
-        graph = BigGraph([[3]])
-        np.testing.assert_approx_equal(graph.lmin, np.nan)
+        for lap_type in ['combinatorial', 'normalized', 'adjacency']:
+            graph = BigGraph([[3]], lap_type=lap_type)
+            np.testing.assert_approx_equal(graph.lmin, np.nan)
 
     def test_estimate_lmax(self):
         graph = BigGraph.create_from(graphs.Sensor())
@@ -209,11 +210,11 @@ class TestCase(unittest.TestCase):
     
         def check_lmax(graph, lmax):
             graph.estimate_lmax(method='bounds')
-            np.testing.assert_allclose(graph.lmax, lmax)
+            np.testing.assert_allclose(graph.lmax, lmax, err_msg='bounds', atol=1e-15)
             graph.estimate_lmax(method='lanczos')
-            np.testing.assert_allclose(graph.lmax, lmax)
+            np.testing.assert_allclose(graph.lmax, lmax, err_msg='lanczos', atol=1e-15)
             graph.compute_fourier_basis()
-            np.testing.assert_allclose(graph.lmax, lmax)
+            np.testing.assert_allclose(graph.lmax, lmax, err_msg='fourier', atol=1e-15)
     
         # Full graph (bound is tight).
         n_nodes, value = 10, 2
@@ -242,8 +243,9 @@ class TestCase(unittest.TestCase):
         check_lmax(graph, lmax=2)
 
         # isolated node
-        graph = BigGraph([[3]])
-        check_lmax(graph, lmax=0)
+        for lap_type in ['combinatorial', 'normalized', 'adjacency']:
+            graph = BigGraph([[3]], lap_type=lap_type)
+            check_lmax(graph, lmax=0)
 
     def test_fourier_basis(self):
         # Smallest eigenvalue close to zero.
