@@ -98,6 +98,9 @@ def _estimate_lmin(G, maxiter):
 
 
 def estimate_lmin(G, maxiter=2000):
+    if G.L.shape == (1,1):
+        return G.L[0,0]
+
     lmins = []
     for subG in G.extract_components():
         if subG.N > 1:  # skip trivial components
@@ -108,6 +111,9 @@ def estimate_lmin(G, maxiter=2000):
 
 
 def estimate_lmax(G, method='lanczos'):
+    if G.L.shape == (1,1):
+        return G.L[0,0]
+
     if method == 'lanczos':
         try:
             lmax = sparse.linalg.eigsh(G.L, k=1, tol=5e-3,
