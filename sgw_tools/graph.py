@@ -227,6 +227,13 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         }
         self.plotting.update(plotting)
 
+    def is_directed(self, recompute=False):
+        if hasattr(self, '_directed') and not recompute:
+            return self._directed
+
+        self._directed = (self.W != self.W.T).nnz != 0
+        return self._directed
+
     def _get_upper_bound(self):
         if self.lap_type == 'normalized' or self.lap_type == 'adjacency':
             return 2
