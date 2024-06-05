@@ -20,6 +20,11 @@ class TestCase(unittest.TestCase):
         s = np.array([[1,2,3],[-1,-2,-3]])
         sgw._tig(g, s)
 
+        # multiple filters, single signal
+        g = gsp.filters.Heat(G, tau=[1,5])
+        s = np.array([[1],[-1]])
+        sgw._tig(g, s)
+
         # isolated node
         G = sgw.BigGraph([[2]])
         g = gsp.filters.Heat(G)
@@ -31,5 +36,15 @@ class TestCase(unittest.TestCase):
         sgw._tig(g, s)
 
         # multiple signals
+        s = np.array([[1,2,3]])
+        sgw._tig(g, s)
+
+        # multiple filters, single signal
+        g = gsp.filters.Heat(G, tau=[1,5])
+        s = np.array([1])
+        sgw._tig(g, s)
+
+        # multiple filters, multiple signals
+        g = gsp.filters.Heat(G, tau=[1,5])
         s = np.array([[1,2,3]])
         sgw._tig(g, s)
