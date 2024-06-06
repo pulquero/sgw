@@ -171,7 +171,7 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
 
         self.logger = gsp.utils.build_logger(__name__)
 
-        if not sparse.isspmatrix(adjacency):
+        if not sparse.issparse(adjacency):
             # if adjacency is of a specialist/read-only type (e.g. when using ray)
             adjacency = np.asanyarray(adjacency)
 
