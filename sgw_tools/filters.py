@@ -72,6 +72,89 @@ class ShiftedFilter(gsp.filters.Filter):
         super().__init__(G, kernels)
 
 
+class ChebyshevFilter(gsp.filters.Filter):
+    def __init__(self, G, coeff_bank, domain, coeff_normalization="pygsp"):
+        coeff_bank = np.array(coeff_bank)
+        if coeff_bank.ndim == 1:
+            coeff_bank = coeff_bank.reshape(1, -1)
+        self.coeff_bank = coeff_bank
+
+        if coeff_normalization == "numpy":
+            self.coeff_bank[:, 0] *= 2
+
+        kernels = [
+            np.polynomial.Chebyshev(coeffs, domain=domain) for coeffs in coeff_bank
+        ]
+        super().__init__(G, kernels)
+
+    def filter(self, s, method='chebyshev', order=30):
+        if s.shape[0] != self.G.N:
+            raise ValueError('First dimension should be the number of nodes '
+                             'G.N = {}, got {}.'.format(self.G.N, s.shape))
+
+        # TODO: not in self.Nin (Nf = Nin x Nout).
+        if s.ndim == 1 or s.shape[-1] not in [1, self.Nf]:
+            if s.ndim == 3:
+                raise ValueError('Third dimension (#features) should be '
+                                 'either 1 or the number of filters Nf = {}, '
+                                 'got {}.'.format(self.Nf, s.shape))
+            s = np.expand_dims(s, -1)
+        n_features_in = s.shape[-1]
+
+        if s.ndim < 3:
+            s = np.expand_dims(s, 1)
+        n_signals = s.shape[1]
+
+        if s.ndim > 3:
+            raise ValueError('At most 3 dimensions: '
+                             '#nodes x #signals x #features.')
+        assert s.ndim == 3
+
+        # TODO: generalize to 2D (m --> n) filter banks.
+        # Only 1 --> Nf (analysis) and Nf --> 1 (synthesis) for now.
+        n_features_out = self.Nf if n_features_in == 1 else 1
+
+        if method == 'exact':
+
+            # TODO: will be handled by g.adjoint().
+            axis = 1 if n_features_in == 1 else 2
+            f = self.evaluate(self.G.e)
+            f = np.expand_dims(f.T, axis)
+            assert f.shape == (self.G.N, n_features_in, n_features_out)
+
+            s = self.G.gft(s)
+            s = np.matmul(s, f)
+            s = self.G.igft(s)
+
+        elif method == 'chebyshev':
+
+            c = self.coeff_bank
+
+            if n_features_in == 1:  # Analysis.
+                s = s.squeeze(axis=2)
+                s = gsp.filters.approximations.cheby_op(self.G, c, s)
+                s = s.reshape((self.G.N, n_features_out, n_signals), order='F')
+                s = s.swapaxes(1, 2)
+
+            elif n_features_in == self.Nf:  # Synthesis.
+                s = s.swapaxes(1, 2)
+                s_in = s.reshape(
+                    (self.G.N * n_features_in, n_signals), order='F')
+                s = np.zeros((self.G.N, n_signals))
+                tmpN = np.arange(self.G.N, dtype=int)
+                for i in range(n_features_in):
+                    s += gsp.filters.approximations.cheby_op(self.G,
+                                                 c[i],
+                                                 s_in[i * self.G.N + tmpN])
+                s = np.expand_dims(s, 2)
+
+        else:
+            raise ValueError('Unknown method {}.'.format(method))
+
+        # Return a 1D signal if e.g. a 1D signal was filtered by one filter.
+        return s.squeeze()
+
+
 class CustomFilter(gsp.filters.Filter):
     def __init__(self, G, funcs, scales=1):
         if not hasattr(funcs, '__iter__'):

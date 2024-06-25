@@ -28,7 +28,9 @@ from .graphs import RandomRegular
 from .filters import GWHeat
 from .filters import GaussianFilter
 from .filters import ShiftedFilter
+from .filters import ChebyshevFilter
 from .filters import CustomFilter
+
 
 """
 Refs: Shape Classification using Spectral Graph Wavelets/Spectral Geometric Methods for Deformable 3D Shape Retrieval
