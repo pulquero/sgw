@@ -56,15 +56,18 @@ class TestCase(unittest.TestCase):
         g = sgw.CustomFilter(G, func)
         order = 20
         expected = g.filter(signal, order=order)
+        func_e = func(G.e)
 
         gsp_coeffs = gsp.filters.compute_cheby_coeff(g, m=order)
         gsp_g = sgw.ChebyshevFilter(G, gsp_coeffs, [0, G.lmax], "pygsp")
+        np.testing.assert_allclose(gsp_g.evaluate(G.e).squeeze(), func_e, err_msg="pygsp evaluate")
         gsp_actual = gsp_g.filter(signal, order=order)
         np.testing.assert_allclose(gsp_actual, expected, err_msg="pygsp coeffs")
 
         domain = [0, 2]
         np_cheby = np.polynomial.Chebyshev.fit(G.e, func(G.e), deg=order, domain=domain)
         np_g = sgw.ChebyshevFilter(G, np_cheby.coef, domain, "numpy")
+        np.testing.assert_allclose(np_g.evaluate(G.e).squeeze(), func_e, err_msg="numpy evaluate")
         np_actual = np_g.filter(signal, order=order)
         np.testing.assert_allclose(np_actual, expected, err_msg="numpy coeffs", rtol=0.1)
 

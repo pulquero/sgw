@@ -74,16 +74,23 @@ class ShiftedFilter(gsp.filters.Filter):
 
 class ChebyshevFilter(gsp.filters.Filter):
     def __init__(self, G, coeff_bank, domain, coeff_normalization="pygsp"):
-        coeff_bank = np.array(coeff_bank)
+        coeff_bank = np.asanyarray(coeff_bank)
         if coeff_bank.ndim == 1:
             coeff_bank = coeff_bank.reshape(1, -1)
-        self.coeff_bank = coeff_bank
 
         if coeff_normalization == "numpy":
+            self.coeff_bank = np.array(coeff_bank, copy=True)
             self.coeff_bank[:, 0] *= 2
+            kernel_coeffs = coeff_bank
+        elif coeff_normalization == "pygsp":
+            self.coeff_bank = coeff_bank
+            kernel_coeffs = np.array(coeff_bank, copy=True)
+            kernel_coeffs[:, 0] /= 2
+        else:
+            raise ValueError(f"Invalid coefficient normalization: {coeff_normalization}")
 
         kernels = [
-            np.polynomial.Chebyshev(coeffs, domain=domain) for coeffs in coeff_bank
+            np.polynomial.Chebyshev(coeffs, domain=domain) for coeffs in kernel_coeffs
         ]
         super().__init__(G, kernels)
 
