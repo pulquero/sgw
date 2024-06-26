@@ -1,6 +1,7 @@
 import numpy as np
 import pygsp as gsp
 from . import util
+from . import approximations
 
 
 class GWHeat(gsp.filters.Filter):
@@ -89,6 +90,8 @@ class ChebyshevFilter(gsp.filters.Filter):
         else:
             raise ValueError(f"Invalid coefficient normalization: {coeff_normalization}")
 
+        self.domain = domain
+
         kernels = [
             np.polynomial.Chebyshev(coeffs, domain=domain) for coeffs in kernel_coeffs
         ]
@@ -139,7 +142,7 @@ class ChebyshevFilter(gsp.filters.Filter):
 
             if n_features_in == 1:  # Analysis.
                 s = s.squeeze(axis=2)
-                s = gsp.filters.approximations.cheby_op(self.G, c, s)
+                s = approximations.cheby_op(self.G, c, s, domain=self.domain)
                 s = s.reshape((self.G.N, n_features_out, n_signals), order='F')
                 s = s.swapaxes(1, 2)
 
@@ -150,9 +153,10 @@ class ChebyshevFilter(gsp.filters.Filter):
                 s = np.zeros((self.G.N, n_signals))
                 tmpN = np.arange(self.G.N, dtype=int)
                 for i in range(n_features_in):
-                    s += gsp.filters.approximations.cheby_op(self.G,
+                    s += approximations.cheby_op(self.G,
                                                  c[i],
-                                                 s_in[i * self.G.N + tmpN])
+                                                 s_in[i * self.G.N + tmpN],
+                                                 domain=self.domain)
                 s = np.expand_dims(s, 2)
 
         else:
