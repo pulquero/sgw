@@ -1,5 +1,5 @@
 import numpy as np
-from scipy import sparse
+from scipy import linalg, sparse
 
 
 def magneticAdjacencyMatrix(G, q):
@@ -62,6 +62,15 @@ def extract_components(G):
         subG.info = {'orig_idx': comp}
         subgraphs.append(subG)
     return subgraphs
+
+
+def eigh(M, spectrum_only=False):
+    if spectrum_only:
+        e = linalg.eigh(M.toarray(order='F'), eigvals_only=True, overwrite_a=True, driver='ev')
+        U = None
+    else:
+        e, U = linalg.eigh(M.toarray(order='F'), overwrite_a=True, driver='evr')
+    return e, U
 
 
 def _estimate_lmin(G, maxiter):

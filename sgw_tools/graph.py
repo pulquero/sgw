@@ -1,7 +1,6 @@
 import numpy as np
 import pygsp as gsp
 from scipy import sparse
-from scipy.linalg import eigh
 from . import util
 
 
@@ -20,10 +19,11 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
                                 'large matrix ({0} x {0}) may take some '
                                 'time.'.format(self.N))
 
+        e, U = self._eigL(spectrum_only=spectrum_only)
         if spectrum_only:
-            self._e = eigh(self.L.toarray(order='F'), eigvals_only=True, overwrite_a=True, driver='ev')
+            self._e = e
         else:
-            self._e, self._U = eigh(self.L.toarray(order='F'), overwrite_a=True, driver='evr')
+            self._e, self._U = e, U
             self._mu = np.max(np.abs(self._U))
 
         self._e[np.isclose(self._e, 0)] = 0
@@ -42,6 +42,9 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
         assert e_max == self._e[-1], "Last eigenvalue is not the largest"
         assert e_max <= e_bound, "Largest eigenvalue was {} but upper bound is {}".format(e_max, e_bound)
         self._lmax = e_max
+
+    def _eigL(self, spectrum_only):
+        return util.eigh(self.L, spectrum_only=spectrum_only)
 
     def _get_upper_bound(self):
         return np.inf
@@ -427,6 +430,16 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         if self._dwq is None:
             self._Wq, self._dwq = util.magneticAdjacencyMatrix(self, self.q)
         return self._dwq
+
+    def _eigL(self, spectrum_only):
+        if self.lap_type == "adjacency":
+            # more accurate to decompose the adjacency matrix itself then shift the result
+            e, U = util.eigh(self.W, spectrum_only=spectrum_only)
+            e = np.flip(1 - e/np.max(e))
+            U = np.flip(U, axis=1) if U else None
+            return e, U
+        else:
+            return super()._eigL(spectrum_only=spectrum_only)
 
     @property
     def lmin(self):
