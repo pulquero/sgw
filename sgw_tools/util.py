@@ -91,7 +91,7 @@ def _estimate_lmin(G, maxiter):
         # single vertex has eigenvalue zero
         return np.nan
 
-    assert lmin >= 0, "Smallest eigenvalue is negative {}".format(lmin)
+    assert lmin >= 0, "Second eigenvalue is negative {}".format(lmin)
     if np.isclose(lmin, 0):
         raise ValueError("Second eigenvalue is (close to) zero: {}".format(lmin))
     return lmin
