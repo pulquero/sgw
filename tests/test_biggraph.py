@@ -261,6 +261,10 @@ class TestCase(unittest.TestCase):
         assert len(G.e) == G.N
         assert G.U.shape[1] == G.N
         assert G.e[-1] < 2
+
+    def test_adjacency_fourier_basis(self):
+        G = BigGraph.create_from(graphs.Logo(), lap_type='adjacency')
+        G.compute_fourier_basis()
     
     def test_eigendecompositions(self):
         G = BigGraph.create_from(graphs.Logo())
