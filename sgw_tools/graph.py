@@ -435,7 +435,11 @@ class BigGraph(LGraphFourier, gsp.graphs.Graph):
         if self.lap_type == "adjacency":
             # more accurate to decompose the adjacency matrix itself then shift the result
             e, U = util.eigh(self.W, spectrum_only=spectrum_only)
-            e = np.flip(1 - e/np.max(e))
+            e[np.isclose(e, 0)] = 0
+            if len(e) == 1 and e[0] == 0:
+                e = np.array([1])
+            else:
+                e = np.flip(1 - e/np.max(e))
             U = np.flip(U, axis=1) if U is not None else None
             return e, U
         else:

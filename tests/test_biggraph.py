@@ -262,10 +262,24 @@ class TestCase(unittest.TestCase):
         assert G.U.shape[1] == G.N
         assert G.e[-1] < 2
 
+    def test_fourier_basis_single_node(self):
+        G = BigGraph([[0]], lap_type='normalized')
+        assert G.L[0,0] == 0
+        G.compute_fourier_basis()
+        assert G.e[0] == 0
+        assert G.U[0,0] == 1
+
     def test_adjacency_fourier_basis(self):
         G = BigGraph.create_from(graphs.Logo(), lap_type='adjacency')
         G.compute_fourier_basis()
-    
+
+    def test_adjacency_fourier_basis_single_node(self):
+        G = BigGraph([[0]], lap_type='adjacency')
+        assert G.L[0,0] == 1
+        G.compute_fourier_basis()
+        assert G.e[0] == 1
+        assert G.U[0,0] == 1
+
     def test_eigendecompositions(self):
         G = BigGraph.create_from(graphs.Logo())
         U1, e1, V1 = scipy.linalg.svd(G.L.toarray())
