@@ -28,6 +28,7 @@ from .graphs import RandomRegular
 from .filters import GWHeat
 from .filters import GaussianFilter
 from .filters import ShiftedFilter
+from .filters import CayleyFilter
 from .filters import ChebyshevFilter
 from .filters import CustomFilter
 

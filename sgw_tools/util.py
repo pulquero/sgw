@@ -172,3 +172,26 @@ def count_negatives(W):
         return np.count_nonzero(W.data < 0)
     else:
         return (W < 0).nnz
+
+
+def cayley_transform(x):
+    return (x - 1j)/(x + 1j)
+
+
+def cayley_filter(x, h, c0, *c):
+    """
+    In principal, the coefficients c can be complex but we assume they are real.
+    """
+    return c0 * np.ones_like(x) + 2 * np.sum([np.real(c[r] * cayley_transform(h*x)**(r+1)) for r in range(len(c))], axis=0)
+
+
+def cayley_filter_jac(x, h, c0, *c):
+    d_c0 = [1]*len(x)
+    d_h_cts = []
+    d_c = []
+    for r in range(len(c)):
+        ct_r = cayley_transform(h*x)**(r+1)
+        d_h_cts.append((r+1) * np.real(c[r] * ct_r * 1j) / ((h*x)**2 + 1))
+        d_c.append(2 * np.real(ct_r))
+    d_h = 4 * x * np.sum(d_h_cts, axis=0)
+    return np.array([d_h, d_c0] + d_c).T

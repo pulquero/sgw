@@ -97,7 +97,7 @@ class ChebyshevFilter(gsp.filters.Filter):
         ]
         super().__init__(G, kernels)
 
-    def filter(self, s, method='chebyshev', order=30):
+    def filter(self, s, method='chebyshev'):
         if s.shape[0] != self.G.N:
             raise ValueError('First dimension should be the number of nodes '
                              'G.N = {}, got {}.'.format(self.G.N, s.shape))
@@ -158,6 +158,123 @@ class ChebyshevFilter(gsp.filters.Filter):
                                                  s_in[i * self.G.N + tmpN],
                                                  domain=self.domain)
                 s = np.expand_dims(s, 2)
+
+        else:
+            raise ValueError('Unknown method {}.'.format(method))
+
+        # Return a 1D signal if e.g. a 1D signal was filtered by one filter.
+        return s.squeeze()
+
+
+class CayleyFilter(gsp.filters.Filter):
+    def __init__(self, G, coeff_bank):
+        coeff_bank = np.asanyarray(coeff_bank)
+        if coeff_bank.ndim == 1:
+            coeff_bank = coeff_bank.reshape(1, -1)
+        self.coeff_bank = coeff_bank
+
+        kernels = [
+            lambda x, h=coeffs[0], c0=coeffs[1], c=coeffs[2:]: util.cayley_filter(x, h, c0, *c) for coeffs in coeff_bank
+        ]
+        super().__init__(G, kernels)
+
+    def filter(self, s, method='cayley', maxiter=1000):
+        if s.shape[0] != self.G.N:
+            raise ValueError('First dimension should be the number of nodes '
+                             'G.N = {}, got {}.'.format(self.G.N, s.shape))
+
+        # TODO: not in self.Nin (Nf = Nin x Nout).
+        if s.ndim == 1 or s.shape[-1] not in [1, self.Nf]:
+            if s.ndim == 3:
+                raise ValueError('Third dimension (#features) should be '
+                                 'either 1 or the number of filters Nf = {}, '
+                                 'got {}.'.format(self.Nf, s.shape))
+            s = np.expand_dims(s, -1)
+        n_features_in = s.shape[-1]
+
+        if s.ndim < 3:
+            s = np.expand_dims(s, 1)
+        n_signals = s.shape[1]
+
+        if s.ndim > 3:
+            raise ValueError('At most 3 dimensions: '
+                             '#nodes x #signals x #features.')
+        assert s.ndim == 3
+
+        # TODO: generalize to 2D (m --> n) filter banks.
+        # Only 1 --> Nf (analysis) and Nf --> 1 (synthesis) for now.
+        n_features_out = self.Nf if n_features_in == 1 else 1
+
+        if method == 'exact':
+
+            # TODO: will be handled by g.adjoint().
+            axis = 1 if n_features_in == 1 else 2
+            f = self.evaluate(self.G.e)
+            f = np.expand_dims(f.T, axis)
+            assert f.shape == (self.G.N, n_features_in, n_features_out)
+
+            s = self.G.gft(s)
+            s = np.matmul(s, f)
+            s = self.G.igft(s)
+
+        elif method == 'cayley-exact':
+            if n_features_in != 1:
+                raise ValueError("Currently only analysis is supported")
+
+            s = s.squeeze(axis=2)
+            L = self.G.L
+            im_eye = np.eye(self.G.N) * 1j
+            ys = []
+            for coeffs in self.coeff_bank:
+                h, c0, c = coeffs[0], coeffs[1], coeffs[2:]
+                J = np.linalg.inv(h * L + im_eye) @ (h * L - im_eye)
+                y = c0 * s
+                v = s
+                for r in range(len(c)):
+                    v = J @ v
+                    y += 2 * np.real(c[r] * v)
+                ys.append(y)
+            s = np.array(ys)
+            s = s.transpose((1, 2, 0))
+
+        elif method == 'cayley':
+            if n_features_in != 1:
+                raise ValueError("Currently only analysis is supported")
+
+            s = s.squeeze(axis=2)
+            L = self.G.L
+            im_eye = np.eye(self.G.N) * 1j
+            ys = []
+            for coeffs in self.coeff_bank:
+                h, c0, c = coeffs[0], coeffs[1], coeffs[2:]
+                y = c0 * s
+            
+                # Jacobi iteration matrix
+                M = h * L + im_eye
+                D = np.diag(1/np.diag(M))
+                B = D @ M.conj()
+                J = -D @ (M - np.diag(np.diag(M)))
+            
+                v = s
+                for r in range(len(c)):
+                    # Jacobi iteration
+                    b = B @ v
+                    v_new = b
+                    iter = 0
+                    while True:
+                        v = v_new
+                        v_new = J @ v + b
+                        if np.allclose(v, v_new):
+                            break
+                        elif iter >= maxiter:
+                            raise Exception("Maximum iterations exceeded")
+                        iter += 1
+                    v = v_new
+            
+                    y += 2 * np.real(c[r] * v)
+                ys.append(y)
+            s = np.array(ys)
+            s = s.transpose((1, 2, 0))
 
         else:
             raise ValueError('Unknown method {}.'.format(method))
