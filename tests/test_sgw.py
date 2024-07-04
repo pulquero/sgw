@@ -101,7 +101,7 @@ class TestCase(unittest.TestCase):
         G.compute_fourier_basis()
         coeffs = [
             [1, 1, 0, 0, 1],
-            [1, 0, 1, -1, 0],
+            [1, 0, 1, -1],
         ]
         g = sgw.CayleyFilter(G, coeffs)
         signal = np.ones(G.N)
@@ -114,7 +114,7 @@ class TestCase(unittest.TestCase):
     def test_cayley_filter_multisignal(self):
         G = gsp.graphs.Sensor(100, lap_type="normalized", seed=5)
         G.compute_fourier_basis()
-        coeffs = [2, 0, 1, 0, -1]
+        coeffs = np.array([2, 0, 1, 0, -1])
         g = sgw.CayleyFilter(G, coeffs)
         signals = np.array([np.ones(G.N), np.random.default_rng().random(G.N)]).T
         expected = g.filter(signals, method="exact")
@@ -128,8 +128,8 @@ class TestCase(unittest.TestCase):
         G.compute_fourier_basis()
         coeffs = [
             [1, 1, 0, 0, 1],
-            [1, 0, 1, -1, 0],
-            [2, 0, 0, 1, 0],
+            [1, 0, 1, -1],
+            [2, 0, 0, 1],
         ]
         g = sgw.CayleyFilter(G, coeffs)
         signals = np.array([np.ones(G.N), np.random.default_rng().random(G.N)]).T

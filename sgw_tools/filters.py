@@ -168,13 +168,15 @@ class ChebyshevFilter(gsp.filters.Filter):
 
 class CayleyFilter(gsp.filters.Filter):
     def __init__(self, G, coeff_bank):
-        coeff_bank = np.asanyarray(coeff_bank)
-        if coeff_bank.ndim == 1:
-            coeff_bank = coeff_bank.reshape(1, -1)
+        if type(coeff_bank) == np.ndarray:
+            if coeff_bank.ndim == 1:
+                coeff_bank = coeff_bank.reshape(1, -1)
+            else:
+                coeff_bank = [np.polynomial.polyutils.trimcoef(coeffs) for coeffs in coeff_bank]
         self.coeff_bank = coeff_bank
 
         kernels = [
-            lambda x, h=coeffs[0], c0=coeffs[1], c=coeffs[2:]: util.cayley_filter(x, h, c0, *c) for coeffs in coeff_bank
+            lambda x, h=coeffs[0], c0=coeffs[1], c=coeffs[2:]: util.cayley_filter(x, h, c0, *c) for coeffs in self.coeff_bank
         ]
         super().__init__(G, kernels)
 
