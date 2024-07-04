@@ -247,7 +247,7 @@ class CayleyFilter(gsp.filters.Filter):
             L = self.G.L
             im_eye = np.eye(self.G.N) * 1j
             ys = []
-            for coeffs in self.coeff_bank:
+            for idx, coeffs in enumerate(self.coeff_bank):
                 h, c0, c = coeffs[0], coeffs[1], coeffs[2:]
                 y = c0 * s
             
@@ -269,7 +269,7 @@ class CayleyFilter(gsp.filters.Filter):
                         if np.allclose(v, v_new):
                             break
                         elif iter >= maxiter:
-                            raise Exception("Maximum iterations exceeded")
+                            raise Exception("Maximum iterations exceeded for term {} of filter {}".format(r+1, idx+1))
                         iter += 1
                     v = v_new
             
