@@ -28,7 +28,7 @@ class LGraphFourier(gsp.graphs.fourier.GraphFourier):
 
         self._e[np.isclose(self._e, 0)] = 0
         e_min = np.min(self._e)
-        assert e_min == self._e[0], "First eigenvalue is not the smallest"
+        assert e_min == self._e[0], "First eigenvalue is not the smallest: {}".format(self._e)
         assert e_min >= 0, "Smallest eigenvalue is negative {}".format(e_min)
         e_nz = self._e[np.where(self._e>0)]
         if len(e_nz) > 0:
