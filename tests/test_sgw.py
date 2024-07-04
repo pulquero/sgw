@@ -116,7 +116,7 @@ class TestCase(unittest.TestCase):
         G.compute_fourier_basis()
         coeffs = np.array([2, 0, 1, 0, -1])
         g = sgw.CayleyFilter(G, coeffs)
-        signals = np.array([np.ones(G.N), np.random.default_rng().random(G.N)]).T
+        signals = np.array([np.ones(G.N), np.random.default_rng(seed=89).random(G.N)]).T
         expected = g.filter(signals, method="exact")
         out1 = g.filter(signals, method="cayley-exact")
         out2 = g.filter(signals, method="cayley")
