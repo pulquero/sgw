@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import sparse
 import pygsp as gsp
 from . import util
 from . import approximations
@@ -225,11 +226,11 @@ class CayleyFilter(gsp.filters.Filter):
 
             s = s.squeeze(axis=2)
             L = self.G.L
-            im_eye = np.eye(self.G.N) * 1j
+            im_eye = sparse.identity(self.G.N, dtype=complex) * 1j
             ys = []
             for coeffs in self.coeff_bank:
                 h, c0, c = coeffs[0], coeffs[1], coeffs[2:]
-                J = np.linalg.inv(h * L + im_eye) @ (h * L - im_eye)
+                J = sparse.linalg.inv(h * L + im_eye) @ (h * L - im_eye)
                 y = c0 * s
                 v = s
                 for r in range(len(c)):
@@ -245,18 +246,18 @@ class CayleyFilter(gsp.filters.Filter):
 
             s = s.squeeze(axis=2)
             L = self.G.L
-            im_eye = np.eye(self.G.N) * 1j
+            im_eye = sparse.identity(self.G.N, dtype=complex) * 1j
             ys = []
             for idx, coeffs in enumerate(self.coeff_bank):
                 h, c0, c = coeffs[0], coeffs[1], coeffs[2:]
                 y = c0 * s
-            
+
                 # Jacobi iteration matrix
                 M = h * L + im_eye
-                D = np.diag(1/np.diag(M))
+                D = sparse.diags(1/M.diagonal())
                 B = D @ M.conj()
-                J = -D @ (M - np.diag(np.diag(M)))
-            
+                J = -D @ (M - sparse.diags(M.diagonal()))
+
                 v = s
                 for r in range(len(c)):
                     # Jacobi iteration
