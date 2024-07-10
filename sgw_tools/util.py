@@ -163,7 +163,7 @@ def operator_norm(W, maxiter=1000):
     if W.shape == (1,1):
         return W[0,0]
     else:
-        svals = sparse.linalg.svds(W.asfptype(), k=1, return_singular_vectors=False, solver="lobpcg", maxiter=maxiter)
+        svals = sparse.linalg.svds(W.astype(np.double, copy=False), k=1, return_singular_vectors=False, solver="lobpcg", maxiter=maxiter)
         return svals[0]
 
 
