@@ -456,6 +456,7 @@ class TestCase(unittest.TestCase):
         expected_evals = scipy.linalg.eigh(graph.L.toarray(), eigvals_only=True)
         expected_evals[0] = 0
         np.testing.assert_allclose(graph.e, expected_evals)
+        np.testing.assert_almost_equal(graph.lmax, np.max(expected_evals), 10)
         # check eigenvectors
         L = graph.L
         U = graph.U

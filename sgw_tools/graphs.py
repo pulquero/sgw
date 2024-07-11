@@ -30,6 +30,8 @@ class RingGraph(BigGraph):
                 if not N&1:  # bipartite
                     self._e[-1] = 2
             self._e[0] = 0
+            self._lmin = self._e[1]
+            self._lmax = self._e[-1]
 
             if not spectrum_only:
                 # eigenvectors are identical for normalized/adjacency and combinatorial Laplacians
