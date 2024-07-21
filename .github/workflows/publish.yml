@@ -18,6 +18,12 @@ jobs:
         pip
         install
         -r requirements.txt
+    - name: Install torch dependencies
+      run: >-
+        python3 -m
+        pip
+        install
+        -r requirements-torch.txt
     - name: Tests
       run: >-
         python3 -m
