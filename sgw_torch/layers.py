@@ -213,4 +213,4 @@ class ChebIILayer(ChebLayer):
     ) -> Tensor:
         ys = [lin.weight for lin in self.lins]
         ws = self.convert_coefficients(ys)
-        return self._evaluate_cheb(ws, x, edge_index, edge_weight, batch, lambda_max)
+        return self._evaluate_chebyshev(ws, x, edge_index, edge_weight, batch, lambda_max)
