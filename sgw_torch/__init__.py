@@ -9,7 +9,7 @@ from sgw_tools import util
 
 from . import layers
 
-def edge_tensors(G):
+def get_edge_tensors(G):
     edge_list = G.get_edge_list()
     edge_index = np.array([
         np.concatenate((edge_list[0], edge_list[1])),
