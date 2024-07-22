@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn.dense.linear import Linear
-from torch_geometric.nn.inits import zeros
+from torch_geometric.nn.inits import zeros, ones
 from torch_geometric.typing import OptTensor
 import sgw_torch
 import numpy as np
@@ -179,7 +179,16 @@ class ChebIILayer(ChebLayer):
     ):
         super().__init__(in_channels, out_channels, K, lap_type, bias)
 
-    def convert_coefficients(self, ys):
+    def reset_parameters(self):
+        super().reset_parameters()
+        # gamma_j should be an estimation of filter value h(x_j), which should be positive so initialize to positive value
+        for lin in self.lins:
+            ones(lin.weight)
+
+    def convert_coefficients(self, ys=None):
+        if ys is None:
+            ys = list(self.parameters())
+
         k1 = len(self.lins)
 
         def transform(Ts):
@@ -194,7 +203,7 @@ class ChebIILayer(ChebLayer):
         x = torch.from_numpy(np.polynomial.chebyshev.chebpts1(k1))
         a = torch.ones(k1)
         b = x
-        ws.append(transform(a/2))
+        ws.append(transform(a))
         ws.append(transform(b))
         for _ in range(2, k1):
             T = 2*x*b - a
@@ -211,6 +220,7 @@ class ChebIILayer(ChebLayer):
         batch: OptTensor = None,
         lambda_max: OptTensor = None,
     ) -> Tensor:
-        ys = [lin.weight for lin in self.lins]
+        # gamma_j (ys[j]) should be an estimation of filter value h(x_j), which should be positive so relu it
+        ys = [F.relu(lin.weight) for lin in self.lins]
         ws = self.convert_coefficients(ys)
         return self._evaluate_chebyshev(ws, x, edge_index, edge_weight, batch, lambda_max)
