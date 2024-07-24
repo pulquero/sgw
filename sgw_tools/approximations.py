@@ -1,9 +1,11 @@
 import numpy as np
+from scipy import optimize
 from scipy import sparse
-from pygsp import utils
+from pygsp.utils import filterbank_handler
+from . import util
 
 
-@utils.filterbank_handler
+@filterbank_handler
 def compute_cheby_coeff(f, m=30, N=None, domain=None, *args, **kwargs):
     r"""
     Compute Chebyshev coefficients for a Filterbank.
@@ -106,3 +108,31 @@ def cheby_op(G, c, signal, domain=None, **kwargs):
         twf_cur = twf_new
 
     return r
+
+
+def compute_cayley_coeff(f, m, method="complex"):
+    G = f.G
+    if method == "complex":
+        res = optimize.minimize(cayley_loss, x0=np.array([1]), args=(f,m), bounds=((0, None),))
+        h = res.x
+        z = util.cayley_transform(h*G.e)
+        y = f.evaluate(G.e).squeeze()
+        p = np.polynomial.polynomial.Polynomial.fit(z, y, m, domain=[0, G.lmax], window=[0, G.lmax])
+        return h[0], np.real(p.coef[0]), p.coef[1:]/2
+    elif method == "real":
+        y = f.evaluate(G.e).squeeze()
+        initial_guess = [1] + [1] + [0]*(m-1)
+        fit = optimize.curve_fit(util.cayley_filter, G.e, y, p0=initial_guess, jac=util.cayley_filter_jac)
+        coeffs = fit[0]
+        return coeffs[0], coeffs[1], coeffs[2:]
+    else:
+        raise ValueError("Unsupported method")
+
+
+def cayley_loss(h, f, m):
+    G = f.G
+    z = util.cayley_transform(h*G.e)
+    y = f.evaluate(G.e).squeeze()
+    p = np.polynomial.polynomial.Polynomial.fit(z, y, m, domain=[0, G.lmax], window=[0, G.lmax])
+    p.coef[0] = np.real(p.coef[0])
+    return np.linalg.norm(y - p(z))

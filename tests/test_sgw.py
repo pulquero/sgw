@@ -83,11 +83,9 @@ class TestCase(unittest.TestCase):
         expected = g.filter(signal, method="exact")
 
         order = 20
-        initial_guess = [1] + [1] + [0]*(order-1)
-        fit = scipy.optimize.curve_fit(sgw.util.cayley_filter, G.e, func(G.e), p0=initial_guess, jac=sgw.util.cayley_filter_jac)
-        coeffs = fit[0]
+        h, c0, c = sgw.approximations.compute_cayley_coeff(g, order, method="real")
 
-        g = sgw.CayleyFilter(G, coeffs)
+        g = sgw.CayleyFilter(G, np.array([h, c0] + list(c)))
         np.testing.assert_allclose(g.evaluate(G.e).squeeze(), func(G.e))
         actual = g.filter(signal, method="exact")
         np.testing.assert_allclose(actual, expected)

@@ -179,9 +179,6 @@ def cayley_transform(x):
 
 
 def cayley_filter(x, h, c0, *c):
-    """
-    In principal, the coefficients c can be complex but we assume they are real.
-    """
     return c0 * np.ones_like(x) + 2 * np.sum([np.real(c[r] * cayley_transform(h*x)**(r+1)) for r in range(len(c))], axis=0)
 
 

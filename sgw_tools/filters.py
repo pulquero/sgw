@@ -176,9 +176,12 @@ class CayleyFilter(gsp.filters.Filter):
                 coeff_bank = [np.polynomial.polyutils.trimcoef(coeffs) for coeffs in coeff_bank]
         self.coeff_bank = coeff_bank
 
-        kernels = [
-            lambda x, h=coeffs[0], c0=coeffs[1], c=coeffs[2:]: util.cayley_filter(x, h, c0, *c) for coeffs in self.coeff_bank
-        ]
+        kernels = []
+        for coeffs in self.coeff_bank:
+            assert np.isreal(coeffs[0]), "h must be real"
+            assert np.isreal(coeffs[1]), "0th coefficient must be real"
+            kernel = lambda x, h=np.real(coeffs[0]), c0=np.real(coeffs[1]), c=coeffs[2:]: util.cayley_filter(x, h, c0, *c)
+            kernels.append(kernel)
         super().__init__(G, kernels)
 
     def filter(self, s, method='cayley', maxiter=1000):
@@ -229,8 +232,9 @@ class CayleyFilter(gsp.filters.Filter):
             im_eye = sparse.identity(self.G.N, dtype=complex) * 1j
             ys = []
             for coeffs in self.coeff_bank:
-                h, c0, c = coeffs[0], coeffs[1], coeffs[2:]
-                J = sparse.linalg.inv(h * L + im_eye) @ (h * L - im_eye)
+                h, c0, c = np.real(coeffs[0]), np.real(coeffs[1]), coeffs[2:]
+                hL = h * L
+                J = sparse.linalg.inv((hL + im_eye).tocsc()) @ (hL - im_eye)
                 y = c0 * s
                 v = s
                 for r in range(len(c)):
@@ -246,35 +250,44 @@ class CayleyFilter(gsp.filters.Filter):
 
             s = s.squeeze(axis=2)
             L = self.G.L
-            im_eye = sparse.identity(self.G.N, dtype=complex) * 1j
+            im_diag = np.ones(self.G.N)
             ys = []
             for idx, coeffs in enumerate(self.coeff_bank):
-                h, c0, c = coeffs[0], coeffs[1], coeffs[2:]
+                h, c0, c = np.real(coeffs[0]), np.real(coeffs[1]), coeffs[2:]
                 y = c0 * s
 
                 # Jacobi iteration matrix
-                M = h * L + im_eye
-                D = sparse.diags(1/M.diagonal())
-                B = D @ M.conj()
-                J = -D @ (M - sparse.diags(M.diagonal()))
+                M_diag_re = h * L.diagonal()
+                M_offdiag_re = h * L - sparse.diags(M_diag_re)
+                M_diag_im = im_diag
 
-                v = s
+                D_denom = M_diag_re**2 + M_diag_im**2
+                D_re = M_diag_re/D_denom
+                D_im = -M_diag_im/D_denom
+                J_re = -diagmul(D_re, M_offdiag_re)
+                J_im = -diagmul(D_im, M_offdiag_re)
+                B_re = sparse.diags(D_re * M_diag_re + D_im * M_diag_im) - J_re
+                B_im = -sparse.diags(D_re * M_diag_im - D_im * M_diag_re) - J_im
+
+                v_re = s
+                v_im = np.zeros_like(s)
                 for r in range(len(c)):
                     # Jacobi iteration
-                    b = B @ v
-                    v_new = b
+                    b_re, b_im = cmul(B_re, B_im, v_re, v_im)
+                    v_new_re, v_new_im = b_re, b_im
                     iter = 0
                     while True:
-                        v = v_new
-                        v_new = J @ v + b
-                        if np.allclose(v, v_new):
+                        v_re, v_im = v_new_re, v_new_im
+                        v_new_re, v_new_im = cmul(J_re, J_im, v_re, v_im)
+                        v_new_re, v_new_im = v_new_re + b_re, v_new_im + b_im
+                        if np.allclose(v_re, v_new_re) and np.allclose(v_im, v_new_im):
                             break
                         elif iter >= maxiter:
                             raise Exception("Maximum iterations exceeded for term {} of filter {}".format(r+1, idx+1))
                         iter += 1
-                    v = v_new
+                    v_re, v_im = v_new_re, v_new_im
             
-                    y += 2 * np.real(c[r] * v)
+                    y += 2 * (np.real(c[r]) * v_re - np.imag(c[r]) * v_im)
                 ys.append(y)
             s = np.array(ys)
             s = s.transpose((1, 2, 0))
@@ -284,6 +297,19 @@ class CayleyFilter(gsp.filters.Filter):
 
         # Return a 1D signal if e.g. a 1D signal was filtered by one filter.
         return s.squeeze()
+
+
+def cmul(ar, ai, br, bi):
+    return (ar@br - ai@bi, ar@bi + ai@br)
+
+
+def diagmul(d, M):
+    assert sparse.isspmatrix_csr(M)
+    new_data = np.empty_like(M.data)
+    for i in range(M.shape[0]):
+        idxs = slice(M.indptr[i], M.indptr[i+1])
+        new_data[idxs] = d[i] * M.data[idxs]
+    return sparse.csr_matrix((new_data, M.indices, M.indptr), shape=M.shape)
 
 
 class CustomFilter(gsp.filters.Filter):
