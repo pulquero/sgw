@@ -9,6 +9,7 @@ from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.nn.dense.linear import Linear
 from torch_geometric.nn.inits import zeros, ones
 from torch_geometric.typing import OptTensor
+import torch_geometric.utils as tg_utils
 import sgw_torch
 import numpy as np
 
@@ -224,3 +225,126 @@ class ChebIILayer(ChebLayer):
         ys = [F.relu(lin.weight) for lin in self.lins]
         ws = self.convert_coefficients(ys)
         return self._evaluate_chebyshev(ws, x, edge_index, edge_weight, batch, lambda_max)
+
+
+class CayleyLayer(SpectralLayer):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        K: int,
+        lap_type: str ='normalized',
+        bias: bool = True,
+    ):
+        super().__init__(in_channels, out_channels, lap_type)
+        self.h = Parameter(torch.tensor(1.0))
+        self.lins = torch.nn.ModuleList([
+            Linear(in_channels, out_channels, bias=False,
+                   weight_initializer='glorot') for _ in range(2*K - 1)
+        ])
+
+        if bias:
+            self.bias = Parameter(Tensor(out_channels))
+        else:
+            self.register_parameter('bias', None)
+
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        super().reset_parameters()
+        ones(self.h)
+        for lin in self.lins:
+            lin.reset_parameters()
+        zeros(self.bias)
+
+    def _weight_op(self, x: Tensor, weight: Tensor):
+        return F.linear(x, weight)
+
+    def _evaluate_cayley(
+        self,
+        h: Tensor,
+        coeffs: List[Tensor],
+        x: Tensor,
+        edge_index: Tensor,
+        edge_weight: OptTensor = None,
+        maxiter = 1000
+    ) -> Tensor:
+
+        num_nodes = x.size(self.node_dim)
+
+        edge_index, edge_weight = self.get_laplacian(edge_index, edge_weight,
+                                                self.lap_type, x.dtype,
+                                                num_nodes)
+
+        diag_mask = (edge_index[0] == edge_index[1])
+        diag_index = edge_index[:, diag_mask]
+        offdiag_mask = torch.logical_not(diag_mask)
+        offdiag_index = edge_index[:, offdiag_mask]
+
+        M_diag_re = h.item() * edge_weight[diag_mask]
+        M_offdiag_re = h.item() * edge_weight[offdiag_mask]
+        M_diag_im = torch.ones(num_nodes)
+
+        D_denom = M_diag_re**2 + M_diag_im**2
+        D_re = M_diag_re/D_denom
+        D_im = -M_diag_im/D_denom
+        J_re = -diagmul(D_re, offdiag_index, M_offdiag_re)
+        J_im = -diagmul(D_im, offdiag_index, M_offdiag_re)
+        B_diag_re = D_re * M_diag_re + D_im * M_diag_im
+        B_diag_im = D_re * M_diag_im - D_im * M_diag_re
+        B_index = torch.cat([offdiag_index, diag_index], dim=1)
+        B_re = torch.cat([-J_re, B_diag_re])
+        B_im = torch.cat([-J_im, -B_diag_im])
+
+        out = self._weight_op(x, coeffs[0])
+
+        v_re = x
+        v_im = torch.zeros_like(x)
+        for r in range(1, len(coeffs), 2):
+            # Jacobi iteration
+            b_re, b_im = self.cpropagate(B_index, x=(v_re, v_im), norm=(B_re, B_im))
+            v_new_re, v_new_im = b_re, b_im
+            iter = 0
+            while True:
+                v_re, v_im = v_new_re, v_new_im
+                v_new_re, v_new_im = self.cpropagate(offdiag_index, x=(v_re, v_im), norm=(J_re, J_im))
+                v_new_re, v_new_im = v_new_re + b_re, v_new_im + b_im
+                if torch.allclose(v_re, v_new_re) and torch.allclose(v_im, v_new_im):
+                    break
+                elif iter >= maxiter:
+                    raise Exception(f"Maximum iterations exceeded for term {r}")
+                iter += 1
+            v_re, v_im = v_new_re, v_new_im
+
+            out += 2 * (self._weight_op(v_re, coeffs[r]) - self._weight_op(v_im, coeffs[r+1]))
+
+        if self.bias is not None:
+            out = out + self.bias
+
+        return out
+
+    def cpropagate(self, edge_index, x, norm):
+        return (self.propagate(edge_index, x=x[0], norm=norm[0]) - self.propagate(edge_index, x=x[1], norm=norm[1]),
+                self.propagate(edge_index, x=x[1], norm=norm[0]) + self.propagate(edge_index, x=x[0], norm=norm[1])
+                )
+
+    def forward(
+        self,
+        x: Tensor,
+        edge_index: Tensor,
+        edge_weight: OptTensor = None,
+    ) -> Tensor:
+        ws = [lin.weight for lin in self.lins]
+        return self._evaluate_cayley(self.h, ws, x, edge_index, edge_weight)
+
+    def __repr__(self) -> str:
+        return (f'{self.__class__.__name__}({self.in_channels}, '
+                f'{self.out_channels}, K={len(self.lins)}, '
+                f'lap_type={self.lap_type})')
+
+
+def diagmul(d, edge_index, edge_weight):
+    new_weight = torch.zeros_like(edge_weight)
+    for i, r in enumerate(edge_index[0]):
+        new_weight[i] += d[r] * edge_weight[i]
+    return new_weight
