@@ -134,5 +134,4 @@ def cayley_loss(h, f, m):
     z = util.cayley_transform(h*G.e)
     y = f.evaluate(G.e).squeeze()
     p = np.polynomial.polynomial.Polynomial.fit(z, y, m, domain=[0, G.lmax], window=[0, G.lmax])
-    p.coef[0] = np.real(p.coef[0])
-    return np.linalg.norm(y - p(z))
+    return np.linalg.norm(y - p(z).real)
