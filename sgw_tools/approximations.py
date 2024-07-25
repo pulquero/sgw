@@ -110,28 +110,29 @@ def cheby_op(G, c, signal, domain=None, **kwargs):
     return r
 
 
-def compute_cayley_coeff(f, m, method="complex"):
-    G = f.G
+def fit_chebyshev_coeff(x, y, xmax, m):
+    p = np.polynomial.Chebyshev.fit(x, y, deg=m, domain=[0, xmax])
+    p.coef[np.isclose(p.coef, 0)] = 0
+    return p.coef
+
+
+def fit_cayley_coeff(x, y, xmax, m, method="complex"):
     if method == "complex":
-        res = optimize.minimize(cayley_loss, x0=np.array([1]), args=(f,m), bounds=((0, None),))
+        res = optimize.minimize(cayley_loss, x0=np.array([1]), args=(x,y,xmax,m), bounds=((0, None),))
         h = res.x
-        z = util.cayley_transform(h*G.e)
-        y = f.evaluate(G.e).squeeze()
-        p = np.polynomial.polynomial.Polynomial.fit(z, y, m, domain=[0, G.lmax], window=[0, G.lmax])
-        return h[0], np.real(p.coef[0]), p.coef[1:]/2
+        z = util.cayley_transform(h*x)
+        p = np.polynomial.polynomial.Polynomial.fit(z, y, deg=m, domain=[0, xmax], window=[0, xmax])
+        return h[0], np.real(p.coef[0]), util.ctidy(p.coef[1:]/2)
     elif method == "real":
-        y = f.evaluate(G.e).squeeze()
         initial_guess = [1] + [1] + [0]*(m-1)
-        fit = optimize.curve_fit(util.cayley_filter, G.e, y, p0=initial_guess, jac=util.cayley_filter_jac)
+        fit = optimize.curve_fit(util.cayley_filter, x, y, p0=initial_guess, jac=util.cayley_filter_jac)
         coeffs = fit[0]
         return coeffs[0], coeffs[1], coeffs[2:]
     else:
         raise ValueError("Unsupported method")
 
 
-def cayley_loss(h, f, m):
-    G = f.G
-    z = util.cayley_transform(h*G.e)
-    y = f.evaluate(G.e).squeeze()
-    p = np.polynomial.polynomial.Polynomial.fit(z, y, m, domain=[0, G.lmax], window=[0, G.lmax])
+def cayley_loss(h, x, y, xmax, m):
+    z = util.cayley_transform(h*x)
+    p = np.polynomial.Polynomial.fit(z, y, m, domain=[0, xmax], window=[0, xmax])
     return np.linalg.norm(y - p(z).real)

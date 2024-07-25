@@ -192,3 +192,11 @@ def cayley_filter_jac(x, h, c0, *c):
         d_c.append(2 * np.real(ct_r))
     d_h = 4 * x * np.sum(d_h_cts, axis=0)
     return np.array([d_h, d_c0] + d_c).T
+
+
+def ctidy(z):
+    no_imag = z[np.isclose(z.imag, 0)]
+    no_imag = no_imag.real
+    no_real = z[np.isclose(z.real, 0)]
+    no_real = no_real.imag * 1j
+    return z

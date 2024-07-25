@@ -38,7 +38,8 @@ class TestCase(unittest.TestCase):
     def test_CayleyLayer(self):
         G = gsp.graphs.Sensor(34, seed=506, lap_type="normalized")
         K = 8
-        h, c0, c = sgw.approximations.compute_cayley_coeff(gsp.filters.Heat(G, tau=5), m=K)
+        func = lambda x: np.exp(-5*x/G.lmax)
+        h, c0, c = sgw.approximations.fit_cayley_coeff(G.e, func(G.e), G.lmax, m=K)
 
         s = sgw.createSignal(G, nodes=[0])
         g = sgw.CayleyFilter(G, np.array([h, c0] + list(c)))

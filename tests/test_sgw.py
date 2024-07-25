@@ -68,8 +68,8 @@ class TestCase(unittest.TestCase):
         gsp_actual = gsp_g.filter(signal)
         np.testing.assert_allclose(gsp_actual, expected, err_msg="pygsp coeffs")
 
-        np_cheby = np.polynomial.Chebyshev.fit(G.e, func(G.e), deg=order, domain=domain)
-        np_g = sgw.ChebyshevFilter(G, np_cheby.coef, domain, "numpy")
+        np_coeffs = sgw.approximations.fit_chebyshev_coeff(G.e, func(G.e), domain[1], order)
+        np_g = sgw.ChebyshevFilter(G, np_coeffs, domain, "numpy")
         np.testing.assert_allclose(np_g.evaluate(G.e).squeeze(), func_e, err_msg="numpy evaluate")
         np_actual = np_g.filter(signal)
         np.testing.assert_allclose(np_actual, expected, err_msg="numpy coeffs")
@@ -83,7 +83,7 @@ class TestCase(unittest.TestCase):
         expected = g.filter(signal, method="exact")
 
         order = 20
-        h, c0, c = sgw.approximations.compute_cayley_coeff(g, order, method="real")
+        h, c0, c = sgw.approximations.fit_cayley_coeff(G.e, func(G.e), G.lmax, order, method="real")
 
         g = sgw.CayleyFilter(G, np.array([h, c0] + list(c)))
         np.testing.assert_allclose(g.evaluate(G.e).squeeze(), func(G.e))
